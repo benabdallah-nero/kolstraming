@@ -91,8 +91,8 @@ export default function App() {
         channelCount={channels.length}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-md md:max-w-xl w-full mx-auto px-4 py-4 space-y-4">
+      {/* Main Container - Responsive on Mobile, Tablet, and Desktop */}
+      <main className="flex-1 max-w-xl md:max-w-3xl lg:max-w-4xl w-full mx-auto px-3 sm:px-4 py-4 space-y-4">
         {/* Tab 1: Channels (Home Landing) */}
         {activeTab === 'channels' && (
           <div className="animate-in fade-in duration-150">

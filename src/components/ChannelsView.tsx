@@ -169,8 +169,8 @@ export const ChannelsView: React.FC<ChannelsViewProps> = ({
         )}
       </div>
 
-      {/* Minimalist Editorial Channel Directory */}
-      <div className="space-y-1.5">
+      {/* Responsive Minimalist Channel Directory */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {filteredChannels.length === 0 ? (
           <div className="py-12 text-center text-stone-500 text-xs">
             لا توجد قنوات تطابق البحث.
