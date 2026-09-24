@@ -1,0 +1,6 @@
+{
+  "name": "kolstream",
+  "description": "kolstream (beta). Minimalist live sports streaming platform featuring beIN Sports Arabic, SSC, Alkass, Eurosport, and live match schedules.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

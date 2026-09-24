@@ -1,11 +1,22 @@
-<div align="center">
+# kolstream
+> beta
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+منصة وتطبيق بث رياضي مبسط وفني (Minimalist Sports Platform) مصمم خصيصاً لمتابعة أهم المباريات والقنوات الرياضية العربية والعالمية بدون إعلانات وبأعلى دقة.
 
-  <h1>Built with AI Studio</h2>
+### القنوات المتوفرة:
+- باقة beIN Sports العربية الكاملة (1 - 9) بدقة 1080p FHD ومعدل 60 إطاراً في الثانية.
+- باقة قنوات SSC الرياضية السعودية.
+- قنوات الكأس الرياضية القطرية (الكأس 1 والكأس 2).
+- قنوات Eurosport العالمية والقنوات الأوروبية الناقلة.
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+### مميزات النظام:
+- بث مباشر نقي 100% عبر HLS (Direct HTML5 Media) دون أي سيرفرات أو إطارات خارجية أو إعلانات منبثقة.
+- جدول مباريات حي ومحدث يضم كافة المباريات الكبرى ومباريات ريال مدريد وبرشلونة والدوريات الأوروبية وتصفيات كأس العالم وأفريقيا.
+- تصميم هادئ وبسيط مستوحى من الطباعة الفنية الإنسانية بدون إيموجيات الذكاء الاصطناعي أو ألوان النيون الصاخبة.
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
-
-</div>
+### التشغيل:
+```bash
+npm install
+npm run dev
+```
+افتح المتصفح على: `http://localhost:3000`
