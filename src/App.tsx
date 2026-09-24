@@ -43,14 +43,22 @@ export default function App() {
 
   useEffect(() => {
     fetch('/api/channels')
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) return null;
+        const text = await res.text();
+        try {
+          return JSON.parse(text);
+        } catch {
+          return null;
+        }
+      })
       .then(data => {
-        if (data.success && data.channels && data.channels.length > 0) {
+        if (data && data.success && Array.isArray(data.channels) && data.channels.length > 0) {
           setChannels(data.channels);
         }
       })
-      .catch(err => {
-        console.warn('Using curated channels:', err);
+      .catch(() => {
+        // Keeps curated channels without logging unhandled errors
       });
   }, []);
 

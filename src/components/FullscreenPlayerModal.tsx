@@ -6,7 +6,9 @@ import {
   Maximize,
   Star,
   ArrowRight,
-  AlertCircle
+  AlertCircle,
+  Tv,
+  Globe
 } from 'lucide-react';
 
 interface FullscreenPlayerModalProps {
@@ -28,6 +30,7 @@ export const FullscreenPlayerModal: React.FC<FullscreenPlayerModalProps> = ({
   onToggleFavorite,
   activeMatch
 }) => {
+  const [playerMode, setPlayerMode] = useState<'native' | 'clean-embed'>('clean-embed');
   const [playerStatus, setPlayerStatus] = useState<'loading' | 'playing' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState<number>(0);
@@ -39,6 +42,12 @@ export const FullscreenPlayerModal: React.FC<FullscreenPlayerModalProps> = ({
     setPlayerStatus('loading');
     setErrorMessage(null);
     setRetryCount(prev => prev + 1);
+  };
+
+  const handleTogglePlayerMode = () => {
+    setPlayerMode(prev => (prev === 'native' ? 'clean-embed' : 'native'));
+    setPlayerStatus('loading');
+    setErrorMessage(null);
   };
 
   const handleToggleFullscreen = () => {
@@ -63,8 +72,16 @@ export const FullscreenPlayerModal: React.FC<FullscreenPlayerModalProps> = ({
     };
   }, []);
 
-  // Pure Native HTML5 Video Stream using Hls.js
+  // HTML5 Native Video Loader
   useEffect(() => {
+    if (playerMode !== 'native') {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+      return;
+    }
+
     setPlayerStatus('loading');
     setErrorMessage(null);
     const video = videoRef.current;
@@ -107,31 +124,28 @@ export const FullscreenPlayerModal: React.FC<FullscreenPlayerModalProps> = ({
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              hls.startLoad();
+              // Fallback to clean-embed if native proxy is restricted
+              setPlayerMode('clean-embed');
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
               hls.recoverMediaError();
               break;
             default:
-              setPlayerStatus('error');
-              setErrorMessage('تعذر تحميل البث المباشر. اضغط إعادة المحاولة.');
+              setPlayerMode('clean-embed');
               break;
           }
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native Apple HLS (Safari/iOS)
       video.src = streamUrl;
       video.addEventListener('loadedmetadata', () => {
         video.play().then(() => setPlayerStatus('playing')).catch(() => setPlayerStatus('playing'));
       });
       video.addEventListener('error', () => {
-        setPlayerStatus('error');
-        setErrorMessage('تعذر تشغيل البث على هذا المتصفح.');
+        setPlayerMode('clean-embed');
       });
     } else {
-      setPlayerStatus('error');
-      setErrorMessage('متصفحك لا يدعم تشغيل بث HLS المباشر.');
+      setPlayerMode('clean-embed');
     }
 
     return () => {
@@ -140,12 +154,14 @@ export const FullscreenPlayerModal: React.FC<FullscreenPlayerModalProps> = ({
         hlsRef.current = null;
       }
     };
-  }, [channel.id, retryCount]);
+  }, [channel.id, retryCount, playerMode]);
 
   const relatedChannels = allChannels.filter(c => {
     if (channel.subcat && c.subcat === channel.subcat) return true;
     return c.category === channel.category;
   }).slice(0, 16);
+
+  const cleanEmbedSrc = `/api/clean-embed/player/${channel.id}?r=${retryCount}`;
 
   return (
     <div
@@ -174,6 +190,25 @@ export const FullscreenPlayerModal: React.FC<FullscreenPlayerModalProps> = ({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {/* Player Mode Switcher */}
+          <button
+            onClick={handleTogglePlayerMode}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-900 border border-stone-800 text-[11px] text-stone-300 hover:text-white transition"
+            title="تبديل وضع المشغل"
+          >
+            {playerMode === 'clean-embed' ? (
+              <>
+                <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                <span>مشغل الويب</span>
+              </>
+            ) : (
+              <>
+                <Tv className="w-3.5 h-3.5 text-blue-400" />
+                <span>مشغل HTML5</span>
+              </>
+            )}
+          </button>
+
           <button
             onClick={() => onToggleFavorite(channel.id)}
             className={`p-1.5 rounded-lg transition ${
@@ -196,23 +231,36 @@ export const FullscreenPlayerModal: React.FC<FullscreenPlayerModalProps> = ({
         </div>
       </div>
 
-      {/* Pure HTML5 Native Browser Video Player */}
+      {/* Video Viewport */}
       <div
         ref={containerRef}
         className="relative w-full bg-black flex items-center justify-center aspect-video sm:max-h-[70vh] shrink-0 overflow-hidden"
       >
-        <video
-          ref={videoRef}
-          controls
-          autoPlay
-          playsInline
-          className="w-full h-full object-contain bg-black"
-          onPlaying={() => setPlayerStatus('playing')}
-          onWaiting={() => setPlayerStatus('loading')}
-        />
+        {playerMode === 'clean-embed' ? (
+          <iframe
+            key={`clean-embed-${channel.id}-${retryCount}`}
+            src={cleanEmbedSrc}
+            className="w-full h-full border-0 bg-black"
+            allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+            allowFullScreen
+            sandbox="allow-scripts allow-same-origin allow-presentation allow-fullscreen"
+            title={channel.name}
+            onLoad={() => setPlayerStatus('playing')}
+          />
+        ) : (
+          <video
+            ref={videoRef}
+            controls
+            autoPlay
+            playsInline
+            className="w-full h-full object-contain bg-black"
+            onPlaying={() => setPlayerStatus('playing')}
+            onWaiting={() => setPlayerStatus('loading')}
+          />
+        )}
 
-        {/* Loading Overlay */}
-        {playerStatus === 'loading' && (
+        {/* Loading Overlay for native mode */}
+        {playerMode === 'native' && playerStatus === 'loading' && (
           <div className="absolute inset-0 bg-black/75 backdrop-blur-sm flex flex-col items-center justify-center text-stone-400 gap-2.5 pointer-events-none z-10">
             <RotateCw className="w-6 h-6 text-stone-400 animate-spin" />
             <span className="text-xs text-stone-300 font-medium">جاري الاتصال بالبث المباشر...</span>
@@ -225,15 +273,22 @@ export const FullscreenPlayerModal: React.FC<FullscreenPlayerModalProps> = ({
           <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center text-stone-400 gap-3 p-6 text-center z-10">
             <AlertCircle className="w-8 h-8 text-rose-500/80" />
             <div className="text-xs text-stone-300 max-w-sm">
-              {errorMessage || 'انقطع الاتصال بالبث المباشر'}
+              {errorMessage || 'تعذر تشغيل البث، اضغط للتبديل للمشغل البديل'}
             </div>
-            <button
-              onClick={handleReload}
-              className="px-4 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition flex items-center gap-1.5 active:scale-95"
-            >
-              <RotateCw className="w-3.5 h-3.5" />
-              <span>إعادة المحاولة</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleTogglePlayerMode}
+                className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition"
+              >
+                تبديل وضع المشغل
+              </button>
+              <button
+                onClick={handleReload}
+                className="px-3.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition"
+              >
+                إعادة المحاولة
+              </button>
+            </div>
           </div>
         )}
 
@@ -260,7 +315,7 @@ export const FullscreenPlayerModal: React.FC<FullscreenPlayerModalProps> = ({
               <span aria-hidden="true" className="opacity-40">·</span>
               <span className="font-sans">{channel.lang || 'عربي'}</span>
               <span aria-hidden="true" className="opacity-40">·</span>
-              <span className="text-emerald-500 font-sans">بث مباشر 60fps</span>
+              <span className="text-emerald-500 font-sans">بث مباشر</span>
             </div>
           </div>
           <span className="font-mono-num text-xs text-stone-400 bg-stone-900 border border-stone-800 px-2.5 py-1 rounded-md">
