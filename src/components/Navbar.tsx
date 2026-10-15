@@ -11,7 +11,7 @@ export const Navbar: React.FC = () => {
 
   return (
     <header className="bg-[#0b0c0e]/95 backdrop-blur-md border-b border-stone-800/40 sticky top-0 z-40 text-stone-200 select-none" dir="rtl">
-      <div className="max-w-6xl mx-auto px-4 py-2.5 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-4">
         {/* Brandmark */}
         <div
           onClick={() => navigate('/home')}

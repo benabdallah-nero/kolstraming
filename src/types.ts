@@ -83,3 +83,26 @@ export interface ExpoFile {
   language: string;
   content: string;
 }
+
+export interface BroadcastInfo {
+  channelId: number;
+  programTitle: string;
+  category: string;
+  tournament?: string;
+  isLive: boolean;
+  isMatch: boolean;
+  match?: LiveMatch;
+  startTime?: string;
+  endTime?: string;
+  commentator?: string;
+}
+
+export type QualityResolution = 'auto' | '1080p' | '720p' | '480p' | '360p';
+
+export interface QualityOption {
+  id: QualityResolution;
+  label: string;
+  badge: string;
+  description: string;
+  bitrateEstimate: string;
+}

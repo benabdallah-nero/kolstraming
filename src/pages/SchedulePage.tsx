@@ -12,8 +12,14 @@ import {
 import { useApp } from '../context/AppContext';
 import { LiveMatch } from '../types';
 import { Pagination } from '../components/Pagination';
+import { usePageSeo } from '../hooks/usePageSeo';
 
 export const SchedulePage: React.FC = () => {
+  usePageSeo({
+    title: 'جدول مباريات اليوم والقنوات الناقلة والمعلقين – kolstream',
+    description: 'جدول مواعيد مباريات اليوم المباشرة في دوري أبطال أوروبا والدوريات الأوروبية مع القنوات الناقلة والمعلقين على kolstream.',
+    canonicalPath: '/schedule'
+  });
   const { matches, loadingMatches, refreshMatches, setActiveStreamingChannel, channels } = useApp();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -47,10 +53,6 @@ export const SchedulePage: React.FC = () => {
       list = list.filter(m => m.status === 'LIVE');
     } else if (category === 'bein') {
       list = list.filter(m => m.isBeinArabic || m.network === 'bein_ar' || (m.broadcasterLabel && m.broadcasterLabel.toLowerCase().includes('bein')));
-    } else if (category === 'ssc') {
-      list = list.filter(m => m.network === 'ssc' || (m.broadcasterLabel && m.broadcasterLabel.includes('SSC')));
-    } else if (category === 'alkass') {
-      list = list.filter(m => m.network === 'alkass' || (m.broadcasterLabel && m.broadcasterLabel.includes('الكأس')));
     }
 
     // Search query
@@ -79,9 +81,7 @@ export const SchedulePage: React.FC = () => {
   const counts = useMemo(() => {
     const live = matches.filter(m => m.status === 'LIVE').length;
     const bein = matches.filter(m => m.isBeinArabic || m.network === 'bein_ar' || (m.broadcasterLabel && m.broadcasterLabel.toLowerCase().includes('bein'))).length;
-    const ssc = matches.filter(m => m.network === 'ssc' || (m.broadcasterLabel && m.broadcasterLabel.includes('SSC'))).length;
-    const alkass = matches.filter(m => m.network === 'alkass' || (m.broadcasterLabel && m.broadcasterLabel.includes('الكأس'))).length;
-    return { all: matches.length, live, bein, ssc, alkass };
+    return { all: matches.length, live, bein };
   }, [matches]);
 
   const handleSearchChange = (val: string) => {
@@ -163,9 +163,7 @@ export const SchedulePage: React.FC = () => {
           {[
             { id: 'all', label: 'جميع المباريات', count: counts.all },
             { id: 'live', label: 'مباشر الآن', count: counts.live, isLive: true },
-            { id: 'bein', label: 'بي إن سبورت (beIN)', count: counts.bein },
-            { id: 'ssc', label: 'إس إس سي (SSC)', count: counts.ssc },
-            { id: 'alkass', label: 'قنوات الكأس', count: counts.alkass }
+            { id: 'bein', label: 'بي إن سبورت (beIN)', count: counts.bein }
           ].map(tab => (
             <button
               key={tab.id}

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { Channel, LiveMatch } from '../types';
+import { Channel, LiveMatch, BroadcastInfo } from '../types';
 
 interface AppContextType {
   channels: Channel[];
@@ -8,6 +8,9 @@ interface AppContextType {
   matches: LiveMatch[];
   loadingMatches: boolean;
   matchesError: string | null;
+  epg: Record<number, BroadcastInfo>;
+  loadingEpg: boolean;
+  getChannelBroadcast: (channelId: number) => BroadcastInfo | null;
   favorites: number[];
   toggleFavorite: (channelId: number) => void;
   isFavorite: (channelId: number) => boolean;
@@ -15,6 +18,7 @@ interface AppContextType {
   setActiveStreamingChannel: (channel: Channel | null) => void;
   refreshChannels: () => Promise<void>;
   refreshMatches: () => Promise<void>;
+  refreshEpg: () => Promise<void>;
   lastMatchesUpdated: Date | null;
 }
 
@@ -31,6 +35,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [loadingMatches, setLoadingMatches] = useState<boolean>(true);
   const [matchesError, setMatchesError] = useState<string | null>(null);
   const [lastMatchesUpdated, setLastMatchesUpdated] = useState<Date | null>(null);
+
+  const [epg, setEpg] = useState<Record<number, BroadcastInfo>>({});
+  const [loadingEpg, setLoadingEpg] = useState<boolean>(true);
 
   // Favorites strictly initialized from localStorage or empty array (no hardcoded pre-selected channels)
   const [favorites, setFavorites] = useState<number[]>(() => {
@@ -113,19 +120,60 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, []);
 
+  // Fetch real-time EPG broadcast guide dynamically from /api/epg/live
+  const fetchEpg = useCallback(async () => {
+    try {
+      const res = await fetch('/api/epg/live');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && data.success && data.epg) {
+        setEpg(data.epg);
+      }
+    } catch {
+      // Graceful fallback
+    } finally {
+      setLoadingEpg(false);
+    }
+  }, []);
+
+  // Helper to retrieve broadcast info for any channel
+  const getChannelBroadcast = useCallback((channelId: number): BroadcastInfo | null => {
+    if (epg[channelId]) {
+      return epg[channelId];
+    }
+    // Check if any current match broadcasts on this channel
+    const activeMatch = matches.find(m => m.channels && m.channels.some(c => c.channel_id === channelId));
+    if (activeMatch) {
+      return {
+        channelId,
+        programTitle: `${activeMatch.competition}: ${activeMatch.teamA.name} ${activeMatch.scoreA !== null ? `${activeMatch.scoreA} - ${activeMatch.scoreB}` : 'ضد'} ${activeMatch.teamB.name}`,
+        category: activeMatch.competition,
+        tournament: activeMatch.competition,
+        isLive: activeMatch.status === 'LIVE',
+        isMatch: true,
+        match: activeMatch,
+        startTime: activeMatch.time,
+        commentator: activeMatch.commentator
+      };
+    }
+    return null;
+  }, [epg, matches]);
+
   // Initial load
   useEffect(() => {
     fetchChannels();
     fetchMatches();
-  }, [fetchChannels, fetchMatches]);
+    fetchEpg();
+  }, [fetchChannels, fetchMatches, fetchEpg]);
 
-  // Background polling for live matches (every 25 seconds)
+  // Background polling for live matches & EPG (every 25 seconds)
   useEffect(() => {
     const interval = setInterval(() => {
       fetchMatches();
+      fetchEpg();
     }, 25000);
     return () => clearInterval(interval);
-  }, [fetchMatches]);
+  }, [fetchMatches, fetchEpg]);
 
   return (
     <AppContext.Provider
@@ -136,6 +184,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         matches,
         loadingMatches,
         matchesError,
+        epg,
+        loadingEpg,
+        getChannelBroadcast,
         favorites,
         toggleFavorite,
         isFavorite,
@@ -143,6 +194,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setActiveStreamingChannel,
         refreshChannels: fetchChannels,
         refreshMatches: fetchMatches,
+        refreshEpg: fetchEpg,
         lastMatchesUpdated
       }}
     >

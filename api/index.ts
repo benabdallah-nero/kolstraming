@@ -42,31 +42,7 @@ const CURATED_SPECIAL_CHANNELS = [
   { id: 100, name: 'beIN SPORTS XTRA 1', category: 'bein', subcat: 'bein_xtra', quality: '1080p FHD', lang: 'English', logo: 'bein_xtra.png', country: 'USA' },
   { id: 578, name: 'BeIN Sports HD Qatar', category: 'ar', subcat: 'bein_ar', quality: '1080p FHD', lang: 'Arabic', logo: 'bein_news.png', country: 'QA' },
   
-  // Saudi Sports (SSC)
-  { id: 614, name: 'SSC Sport 1 HD', category: 'ar', subcat: 'ssc', quality: '1080p FHD', lang: 'Arabic', logo: 'ssc.png', country: 'SA' },
-  { id: 615, name: 'SSC Sport 2 HD', category: 'ar', subcat: 'ssc', quality: '1080p FHD', lang: 'Arabic', logo: 'ssc.png', country: 'SA' },
-  { id: 616, name: 'SSC Sport 3 HD', category: 'ar', subcat: 'ssc', quality: '1080p FHD', lang: 'Arabic', logo: 'ssc.png', country: 'SA' },
-  { id: 617, name: 'SSC Sport 4 HD', category: 'ar', subcat: 'ssc', quality: '1080p FHD', lang: 'Arabic', logo: 'ssc.png', country: 'SA' },
-  { id: 618, name: 'SSC Sport 5 HD', category: 'ar', subcat: 'ssc', quality: '1080p FHD', lang: 'Arabic', logo: 'ssc.png', country: 'SA' },
-  { id: 619, name: 'SSC Sport Extra 1', category: 'ar', subcat: 'ssc', quality: '1080p FHD', lang: 'Arabic', logo: 'ssc.png', country: 'SA' },
-  { id: 620, name: 'SSC Sport Extra 2', category: 'ar', subcat: 'ssc', quality: '1080p FHD', lang: 'Arabic', logo: 'ssc.png', country: 'SA' },
-  { id: 621, name: 'SSC Sport Extra 3', category: 'ar', subcat: 'ssc', quality: '1080p FHD', lang: 'Arabic', logo: 'ssc.png', country: 'SA' },
-
-  // Alkass Sports (Qatar)
-  { id: 781, name: 'Alkass One HD', category: 'ar', subcat: 'alkass', quality: '1080p FHD', lang: 'Arabic', logo: 'alkass.png', country: 'QA' },
-  { id: 782, name: 'Alkass Two HD', category: 'ar', subcat: 'alkass', quality: '1080p FHD', lang: 'Arabic', logo: 'alkass.png', country: 'QA' },
-  { id: 783, name: 'Alkass Three HD', category: 'ar', subcat: 'alkass', quality: '1080p FHD', lang: 'Arabic', logo: 'alkass.png', country: 'QA' },
-  { id: 784, name: 'Alkass Four HD', category: 'ar', subcat: 'alkass', quality: '1080p FHD', lang: 'Arabic', logo: 'alkass.png', country: 'QA' },
-
-  // Abu Dhabi Sports & Dubai Sports
-  { id: 600, name: 'Abu Dhabi Sports 1 UAE', category: 'ar', subcat: 'ad_sports', quality: '1080p FHD', lang: 'Arabic', logo: 'adsports.png', country: 'AE' },
-  { id: 601, name: 'Abu Dhabi Sports 2 UAE', category: 'ar', subcat: 'ad_sports', quality: '1080p FHD', lang: 'Arabic', logo: 'adsports.png', country: 'AE' },
-  { id: 609, name: 'Abu Dhabi Sports 1 Premium', category: 'ar', subcat: 'ad_sports', quality: '1080p FHD', lang: 'Arabic', logo: 'adsports_prem.png', country: 'AE' },
-  { id: 610, name: 'Abu Dhabi Sports 2 Premium', category: 'ar', subcat: 'ad_sports', quality: '1080p FHD', lang: 'Arabic', logo: 'adsports_prem.png', country: 'AE' },
-  { id: 604, name: 'Dubai Sports 1 UAE', category: 'ar', subcat: 'dubai_sports', quality: '1080p FHD', lang: 'Arabic', logo: 'dubai_sports.png', country: 'AE' },
-  { id: 605, name: 'Dubai Sports 2 UAE', category: 'ar', subcat: 'dubai_sports', quality: '1080p FHD', lang: 'Arabic', logo: 'dubai_sports.png', country: 'AE' },
-  { id: 606, name: 'Dubai Sports 3 UAE', category: 'ar', subcat: 'dubai_sports', quality: '1080p FHD', lang: 'Arabic', logo: 'dubai_sports.png', country: 'AE' },
-  { id: 608, name: 'Dubai Racing 2 UAE', category: 'ar', subcat: 'dubai_sports', quality: '1080p FHD', lang: 'Arabic', logo: 'dubai_racing.png', country: 'AE' },
+  { id: 425, name: 'BeIN SPORTS USA', category: 'bein', subcat: 'bein_us', quality: '1080p FHD', lang: 'English', logo: 'bein_us.png', country: 'US' },
 
   // Eurosport Channels
   { id: 772, name: 'Eurosport 1 France', category: 'euro', subcat: 'eurosport', quality: '1080p FHD', lang: 'French', logo: 'eurosport1.png', country: 'FR' },
@@ -118,10 +94,8 @@ const CURATED_SPECIAL_CHANNELS = [
 
 function categorizeChannel(name: string): { category: string; subcat: string; lang: string } {
   const lower = name.toLowerCase();
-  if (lower.includes('arabic') || lower.includes('alkass') || lower.includes('ssc') || lower.includes('dhabi') || lower.includes('dubai') || lower.includes('qatar') || lower.includes('ksa') || lower.includes('ontime') || lower.includes('al kass')) {
-    return { category: 'ar', subcat: 'arabic_sports', lang: 'Arabic' };
-  }
   if (lower.includes('bein')) {
+    if (lower.includes('arabic') || lower.includes('ar') || /bein\s*sports?\s*\d+/i.test(lower)) return { category: 'ar', subcat: 'bein_ar', lang: 'Arabic' };
     if (lower.includes('france') || lower.includes('max')) return { category: 'bein', subcat: 'bein_fr', lang: 'French' };
     if (lower.includes('turkey')) return { category: 'bein', subcat: 'bein_tr', lang: 'Turkish' };
     if (lower.includes('australia')) return { category: 'bein', subcat: 'bein_au', lang: 'English' };
@@ -161,6 +135,10 @@ app.get('/api/channels', async (req: Request, res: Response) => {
           const id = parseInt(match[1], 10);
           if (!knownIds.has(id)) {
             const rawName = match[2].replace(/<[^>]+>/g, '').replace(/ID:\s*\d+/, '').trim();
+            // Strictly exclude non-beIN regional channels (SSC, Alkass, Abu Dhabi, Dubai)
+            if (/ssc|alkass|al kass|abu dhabi|ad sport|dubai/i.test(rawName)) {
+              continue;
+            }
             const { category, subcat, lang } = categorizeChannel(rawName);
             allChannels.push({
               id,
@@ -194,21 +172,23 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
   }
 
   const mapBroadcaster = (rawChannel: string | null) => {
-    if (!rawChannel) {
+    if (!rawChannel || rawChannel.trim().length === 0) {
       return {
         channels: [],
         isBeinArabic: false,
-        broadcasterLabel: 'غير منقولة',
+        broadcasterLabel: 'غير منقولة فضائياً',
         network: 'unbroadcast' as const
       };
     }
 
-    const lower = rawChannel.toLowerCase();
-    const beinMatch = rawChannel.match(/bein\s*sports?\s*(\d+)/i) ||
-                      rawChannel.match(/ب[يى]\s*إن\s*سبورت\s*(\d+)/i) ||
-                      rawChannel.match(/ب[يى]\s*ان\s*سبورت\s*(\d+)/i);
-    if (beinMatch) {
-      const num = parseInt(beinMatch[1], 10);
+    const trimmed = rawChannel.trim();
+    const lower = trimmed.toLowerCase();
+
+    // 1. Check beIN Arabic 1-9 (e.g. "بى ان سبورت 8 HD", "beIN Sports 1", "بي إن سبورت 5")
+    const beinNumMatch = trimmed.match(/(?:bein\s*sports?|ب[يى]\s*إن\s*سبورت|ب[يى]\s*ان\s*سبورت)\s*(\d+)/i) ||
+                         trimmed.match(/(\d+)\s*(?:ب[يى]\s*إن\s*سبورت|ب[يى]\s*ان\s*سبورت)/i);
+    if (beinNumMatch) {
+      const num = parseInt(beinNumMatch[1], 10);
       const chId = 90 + num;
       if (chId >= 91 && chId <= 99) {
         return {
@@ -220,37 +200,93 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
       }
     }
 
-    if (lower.includes('الكأس 2') || lower.includes('alkass 2')) {
+    // 2. Check beIN News / الإخبارية
+    if (lower.includes('news') || lower.includes('إخبار') || lower.includes('اخبار')) {
       return {
-        channels: [{ channel_id: 782, channel_name: 'الكأس 2 HD', quality: '1080p FHD', isBeinArabic: false }],
-        isBeinArabic: false,
-        broadcasterLabel: 'قنوات الكأس 2 HD',
-        network: 'alkass' as const
+        channels: [{ channel_id: 578, channel_name: 'beIN Sports News HD', quality: '1080p FHD', isBeinArabic: true }],
+        isBeinArabic: true,
+        broadcasterLabel: 'beIN Sports News HD',
+        network: 'bein_ar' as const
       };
     }
 
-    if (lower.includes('الكأس') || lower.includes('alkass')) {
+    // 3. Check beIN English 1/2
+    if (lower.includes('english 1') || lower.includes('en 1')) {
       return {
-        channels: [{ channel_id: 781, channel_name: 'الكأس 1 HD', quality: '1080p FHD', isBeinArabic: false }],
+        channels: [{ channel_id: 61, channel_name: 'beIN Sports English 1', quality: '1080p FHD', isBeinArabic: false }],
         isBeinArabic: false,
-        broadcasterLabel: 'قنوات الكأس 1 HD',
-        network: 'alkass' as const
+        broadcasterLabel: 'beIN Sports English 1',
+        network: 'bein_mena' as const
+      };
+    }
+    if (lower.includes('english 2') || lower.includes('en 2')) {
+      return {
+        channels: [{ channel_id: 90, channel_name: 'beIN Sports English 2', quality: '1080p FHD', isBeinArabic: false }],
+        isBeinArabic: false,
+        broadcasterLabel: 'beIN Sports English 2',
+        network: 'bein_mena' as const
       };
     }
 
-    if (lower.includes('ssc')) {
+    // 4. Check beIN France 1/2/3
+    if (lower.includes('france 1') || lower.includes('fr 1')) {
       return {
-        channels: [{ channel_id: 614, channel_name: 'SSC 1 HD', quality: '1080p FHD', isBeinArabic: false }],
+        channels: [{ channel_id: 116, channel_name: 'beIN SPORTS 1 France', quality: '1080p FHD', isBeinArabic: false }],
         isBeinArabic: false,
-        broadcasterLabel: 'قنوات SSC 1 HD',
-        network: 'ssc' as const
+        broadcasterLabel: 'beIN SPORTS 1 France',
+        network: 'bein_fr' as const
+      };
+    }
+    if (lower.includes('france 2') || lower.includes('fr 2')) {
+      return {
+        channels: [{ channel_id: 117, channel_name: 'beIN SPORTS 2 France', quality: '1080p FHD', isBeinArabic: false }],
+        isBeinArabic: false,
+        broadcasterLabel: 'beIN SPORTS 2 France',
+        network: 'bein_fr' as const
+      };
+    }
+    if (lower.includes('france 3') || lower.includes('fr 3')) {
+      return {
+        channels: [{ channel_id: 118, channel_name: 'beIN SPORTS 3 France', quality: '1080p FHD', isBeinArabic: false }],
+        isBeinArabic: false,
+        broadcasterLabel: 'beIN SPORTS 3 France',
+        network: 'bein_fr' as const
       };
     }
 
+    // 5. Check Eurosport 1/2
+    if (lower.includes('eurosport 1')) {
+      return {
+        channels: [{ channel_id: 772, channel_name: 'Eurosport 1 France', quality: '1080p FHD', isBeinArabic: false }],
+        isBeinArabic: false,
+        broadcasterLabel: 'Eurosport 1 France',
+        network: 'eurosport' as const
+      };
+    }
+    if (lower.includes('eurosport 2')) {
+      return {
+        channels: [{ channel_id: 773, channel_name: 'Eurosport 2 France', quality: '1080p FHD', isBeinArabic: false }],
+        isBeinArabic: false,
+        broadcasterLabel: 'Eurosport 2 France',
+        network: 'eurosport' as const
+      };
+    }
+
+    // 6. Explicitly unbroadcast or digital only (e.g. TOD)
+    if (lower.includes('غير') || lower.includes('tod')) {
+      return {
+        channels: [],
+        isBeinArabic: false,
+        broadcasterLabel: trimmed,
+        network: 'unbroadcast' as const
+      };
+    }
+
+    // Other broadcaster reported in schedule (e.g. ON Sport)
     return {
       channels: [],
       isBeinArabic: false,
-      broadcasterLabel: rawChannel,
+      broadcasterLabel: trimmed,
       network: 'other' as const
     };
   };
@@ -316,7 +352,7 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
 
           if (!teamA || !teamB) continue;
 
-          if (teamA.includes('إسرائيل') || teamB.includes('إسرائيل') || teamA.includes('الكيان') || teamB.includes('الكيان')) {
+          if (/إسرائيل|الكيان|مكابي|هابويل|هبوعيل|تل أبيب|بئر سبع|بيتار|سخنين|maccabi|hapoel/i.test(`${teamA} ${teamB}`)) {
             continue;
           }
 
@@ -354,7 +390,7 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
           const logoBMatch = item.match(/class="teams teamB".*?<img[^>]*src="([^"]+)"/s);
           const logoB = logoBMatch ? logoBMatch[1].replace(/\\/g, '/') : null;
 
-          const commentator = mapped.isBeinArabic ? commentators[matchIdx % commentators.length] : undefined;
+          const commentator = undefined;
           matchIdx++;
 
           liveList.push({
@@ -452,39 +488,45 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
     },
     {
       id: 'fb_4',
-      competition: 'دوري روشن السعودي',
-      teamA: { name: 'الهلال', logo: 'https://media.api-sports.io/football/teams/2939.png' },
-      teamB: { name: 'النصر', logo: 'https://media.api-sports.io/football/teams/2940.png' },
-      scoreA: 1,
-      scoreB: 0,
+      competition: 'الدوري الألماني (البوندسليغا)',
+      teamA: { name: 'باير ليفركوزن', logo: 'https://media.api-sports.io/football/teams/168.png' },
+      teamB: { name: 'بايرن ميونخ', logo: 'https://media.api-sports.io/football/teams/157.png' },
+      scoreA: 2,
+      scoreB: 1,
       status: 'LIVE',
-      statusText: 'الشوط الأول',
-      minute: "35'",
-      time: '21:00 بتوقيت مكة',
-      localTime: '21:00 بتوقيت مكة',
-      channels: [{ channel_id: 614, channel_name: 'SSC 1 HD' }],
-      commentator: 'فهد العتيبي',
-      isBeinArabic: false,
-      broadcasterLabel: 'SSC 1 HD',
-      network: 'ssc'
+      statusText: 'الشوط الثاني',
+      minute: "74'",
+      time: '19:30 بتوقيت مكة',
+      localTime: '19:30 بتوقيت مكة',
+      channels: [
+        { channel_id: 95, channel_name: 'beIN Sports 5 HD' },
+        { channel_id: 117, channel_name: 'beIN SPORTS 2 France' }
+      ],
+      commentator: 'حسن العيدروس',
+      isBeinArabic: true,
+      broadcasterLabel: 'beIN Sports 5 HD',
+      network: 'bein_ar'
     },
     {
       id: 'fb_5',
-      competition: 'دوري روشن السعودي',
-      teamA: { name: 'الاتحاد', logo: 'https://media.api-sports.io/football/teams/2941.png' },
-      teamB: { name: 'الأهلي السعودي', logo: 'https://media.api-sports.io/football/teams/2942.png' },
+      competition: 'الدوري الفرنسي (ليغ 1)',
+      teamA: { name: 'باريس سان جيرمان', logo: 'https://media.api-sports.io/football/teams/85.png' },
+      teamB: { name: 'أولمبيك مارسيليا', logo: 'https://media.api-sports.io/football/teams/81.png' },
       scoreA: null,
       scoreB: null,
       status: 'FIXTURE',
       statusText: 'لم تبدأ بعد',
       minute: null,
-      time: '21:00 بتوقيت مكة',
-      localTime: '21:00 بتوقيت مكة',
-      channels: [{ channel_id: 615, channel_name: 'SSC 2 HD' }],
-      commentator: 'فارس عوض',
-      isBeinArabic: false,
-      broadcasterLabel: 'SSC 2 HD',
-      network: 'ssc'
+      time: '21:45 بتوقيت مكة',
+      localTime: '21:45 بتوقيت مكة',
+      channels: [
+        { channel_id: 94, channel_name: 'beIN Sports 4 HD' },
+        { channel_id: 116, channel_name: 'beIN SPORTS 1 France' }
+      ],
+      commentator: 'جواد بدة',
+      isBeinArabic: true,
+      broadcasterLabel: 'beIN Sports 4 HD',
+      network: 'bein_ar'
     },
     {
       id: 'fb_6',
@@ -506,26 +548,118 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
     },
     {
       id: 'fb_7',
-      competition: 'دوري نجوم قطر',
-      teamA: { name: 'السد', logo: 'https://media.api-sports.io/football/teams/2950.png' },
-      teamB: { name: 'الدحيل', logo: 'https://media.api-sports.io/football/teams/2951.png' },
+      competition: 'الدوري الإيطالي (سيريا آ)',
+      teamA: { name: 'يوفنتوس', logo: 'https://media.api-sports.io/football/teams/496.png' },
+      teamB: { name: 'إنتر ميلان', logo: 'https://media.api-sports.io/football/teams/505.png' },
       scoreA: null,
       scoreB: null,
       status: 'FIXTURE',
       statusText: 'لم تبدأ بعد',
       minute: null,
-      time: '18:30 بتوقيت مكة',
-      localTime: '18:30 بتوقيت مكة',
-      channels: [{ channel_id: 781, channel_name: 'الكأس 1 HD' }],
-      commentator: 'خليل البلوشي',
+      time: '21:45 بتوقيت مكة',
+      localTime: '21:45 بتوقيت مكة',
+      channels: [
+        { channel_id: 117, channel_name: 'beIN SPORTS 2 France' },
+        { channel_id: 134, channel_name: 'Arena Sport 1 Premium' }
+      ],
+      commentator: 'أحمد الطيب',
       isBeinArabic: false,
-      broadcasterLabel: 'Alkass One HD',
-      network: 'alkass'
+      broadcasterLabel: 'beIN SPORTS France / Arena Sport',
+      network: 'bein_fr'
     }
   ];
 
   setCache('live_matches_realtime_v1', fallbackMatches);
   res.json({ success: true, matches: fallbackMatches });
+});
+
+// Broadcast schedule & on-air programming (inspired by official guide like beIN Sports MENA schedule)
+const OFFICIAL_DEFAULT_PROGRAMS: Record<number, { title: string; category: string }> = {
+  91: { title: 'استوديو الأبطال ودوري أبطال أوروبا (تغطية حية ومباشرة)', category: 'دوري أبطال أوروبا' },
+  92: { title: 'الدوري الإنجليزي الممتاز: استوديو البريميرليغ والمباريات المباشرة', category: 'الدوري الإنجليزي' },
+  93: { title: 'الدوري الإسباني (لا ليغا): كواليس الملاعب ومباريات اليوم', category: 'الدوري الإسباني' },
+  94: { title: 'دوري أبطال إفريقيا والدوري الفرنسي (مباشر وحصري)', category: 'دوري أبطال إفريقيا' },
+  95: { title: 'الدوري الألماني (البوندسليغا): ملخصات الجولة والمواجهات', category: 'الدوري الألماني' },
+  96: { title: 'بطولات الماسترز للتنس العالمية والكرة الطائرة', category: 'كرة المضرب / تنس' },
+  97: { title: 'سباقات الدراجات العالمية وألعاب القوى والمحركات', category: 'رياضات متنوعة' },
+  98: { title: 'عالم السرعة: بطولة العالم لسباقات الفورمولا 1', category: 'فورمولا 1' },
+  99: { title: 'تغطيات خاصة وبطولات التنس العالمية والجراند سلام', category: 'كرة المضرب' },
+  578: { title: 'نشرة الأخبار الرياضية الشاملة وأبرز الانتقالات العالمية', category: 'أخبار رياضية 24/7' },
+  61: { title: 'Premier League Matchday Live: English Studio & Commentary', category: 'Premier League' },
+  90: { title: 'UEFA Champions League Magazine & Analysis', category: 'Champions League' },
+  100: { title: 'beIN SPORTS XTRA: Global Sports Showcase & Live Action', category: 'International' },
+  116: { title: 'beIN SPORTS 1 France: UEFA Champions League Club & Ligue 2', category: 'Football Français' },
+  117: { title: 'beIN SPORTS 2 France: Serie A & Bundesliga En Direct', category: 'Football Européen' },
+  118: { title: 'beIN SPORTS 3 France: NBA Extra & Tennis Wimbledon', category: 'Multi-Sports' },
+  614: { title: 'دوري روشن السعودي: الاستوديو التحليلي ومباريات الجولة', category: 'دوري روشن السعودي' },
+  615: { title: 'دوري أبطال آسيا للنخبة والمسابقات السعودية الكبرى', category: 'دوري أبطال آسيا' },
+  616: { title: 'كأس خادم الحرمين الشريفين والكرة السعودية', category: 'بطولات السعودية' },
+  619: { title: 'البث التكتيكي والإضافي لمباريات دوري روشن السعودي', category: 'دوري روشن السعودي' },
+  781: { title: 'برنامج المجلس / دوري نجوم أريدُ القطري', category: 'الكرة القطرية' },
+  782: { title: 'كأس أمير دولة قطر وبطولات الخليج العربي', category: 'بطولات الخليج' },
+  783: { title: 'سباقات الهجن والفروسية وبطولات الفروسية التراثية', category: 'رياضات تراثية' },
+  600: { title: 'دوري أدنوك الإماراتي للمحترفين وكأس رئيس الدولة', category: 'الكرة الإماراتية' },
+  609: { title: 'الدوري الإيطالي (سيريا آ): استوديو الكالتشيو الحصري', category: 'الدوري الإيطالي' },
+  610: { title: 'الدوري الإيطالي وكأس إيطاليا بريميوم', category: 'الدوري الإيطالي' },
+  772: { title: 'Eurosport 1: طواف فرنسا للدراجات وبطولات الجراند سلام للتنس', category: 'Eurosport Europe' },
+  773: { title: 'Eurosport 2: بطولات السنوكر وكأس العالم للتزلج الألبي', category: 'Eurosport Europe' },
+  524: { title: 'EuroSport 1 Spain: Vuelta a España & Grand Slam Tennis', category: 'EuroSport España' }
+};
+
+// API: Real-Time EPG & Broadcast Guide ("يبث الآن") for Channel Catalog
+app.get('/api/epg/live', async (req: Request, res: Response) => {
+  try {
+    const cachedEpg = getCached<Record<number, any>>('live_epg_cache_v1', 20 * 1000);
+    if (cachedEpg) {
+      return res.json({ success: true, epg: cachedEpg });
+    }
+
+    // Get current live matches
+    const matchesRes = getCached<any[]>('live_matches_realtime_v1', 60 * 1000) || [];
+    const epgMap: Record<number, any> = {};
+
+    // 1. Map all channels that have active scheduled matches right now
+    for (const match of matchesRes) {
+      if (match.channels && Array.isArray(match.channels)) {
+        for (const ch of match.channels) {
+          const chId = Number(ch.channel_id);
+          if (chId && !epgMap[chId]) {
+            const isLive = match.status === 'LIVE';
+            epgMap[chId] = {
+              channelId: chId,
+              programTitle: `${match.competition}: ${match.teamA.name} ${match.scoreA !== null ? `${match.scoreA} - ${match.scoreB}` : 'ضد'} ${match.teamB.name}`,
+              category: match.competition,
+              tournament: match.competition,
+              isLive,
+              isMatch: true,
+              match,
+              startTime: match.time,
+              commentator: match.commentator
+            };
+          }
+        }
+      }
+    }
+
+    // 2. Fill in channels with their official schedule programs
+    for (const [keyStr, prog] of Object.entries(OFFICIAL_DEFAULT_PROGRAMS)) {
+      const chId = Number(keyStr);
+      if (!epgMap[chId]) {
+        epgMap[chId] = {
+          channelId: chId,
+          programTitle: prog.title,
+          category: prog.category,
+          isLive: false,
+          isMatch: false
+        };
+      }
+    }
+
+    setCache('live_epg_cache_v1', epgMap);
+    res.json({ success: true, epg: epgMap });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message, epg: {} });
+  }
 });
 
 const CHANNEL_SLUG_MAP: Record<string, string> = {
@@ -549,23 +683,6 @@ const CHANNEL_SLUG_MAP: Record<string, string> = {
   '116': 'beINSPORTS1FR',
   '117': 'beINSPORTS2FR',
   '118': 'beINSPORTS3FR',
-  '614': 'SSC1',
-  '615': 'SSC2',
-  '616': 'SSC3',
-  '617': 'SSC4',
-  '618': 'SSC5',
-  '619': 'SSCExtra1',
-  '620': 'SSCExtra2',
-  '781': 'Alkass1',
-  '782': 'Alkass2',
-  '783': 'Alkass3',
-  '784': 'Alkass4',
-  '600': 'ADSports1',
-  '601': 'ADSports2',
-  '609': 'ADSportsPrem1',
-  '610': 'ADSportsPrem2',
-  '604': 'DubaiSports1',
-  '605': 'DubaiSports2',
   '771': 'Euro1',
   '772': 'Euro1FR',
   '773': 'Euro2',
@@ -782,6 +899,103 @@ app.get('/api/clean-embed/:folder/:id', async (req: Request, res: Response) => {
           });
         });
         window.onbeforeunload = null;
+
+        // Bridge between Kolstream player controls and internal HLS stream
+        function inspectAndConnectHls() {
+          var hlsInst = window.hls || (window.player && window.player.core && window.player.core.hls);
+          if (!hlsInst && window.Hls) {
+            // Check prototypes or hook
+          }
+          if (hlsInst) {
+            try {
+              var reportLevels = function() {
+                var lvls = (hlsInst.levels || []).map(function(l) {
+                  return { height: l.height || 720, bitrate: l.bitrate || 0 };
+                });
+                window.parent.postMessage({
+                  type: 'KOLSTREAM_STREAM_INFO',
+                  levelsCount: lvls.length,
+                  levels: lvls,
+                  isSingleSourceBitrate: lvls.length <= 1
+                }, '*');
+              };
+              reportLevels();
+              if (hlsInst.on) {
+                hlsInst.on(Hls.Events.MANIFEST_PARSED, reportLevels);
+                hlsInst.on(Hls.Events.LEVEL_LOADED, reportLevels);
+              }
+            } catch(e) {}
+          }
+        }
+
+        // Find and protect video element with Stall Watchdog
+        function setupVideoWatchdog() {
+          var video = document.querySelector('video');
+          if (!video || video._kolstreamHooked) return;
+          video._kolstreamHooked = true;
+
+          var stallTimer = null;
+          var handleStall = function() {
+            if (stallTimer) clearTimeout(stallTimer);
+            stallTimer = setTimeout(function() {
+              if (video.buffered && video.buffered.length > 0) {
+                var end = video.buffered.end(video.buffered.length - 1);
+                if (end > video.currentTime + 1) {
+                  video.currentTime = end - 0.5;
+                }
+              }
+              video.play().catch(function() {});
+              window.parent.postMessage({ type: 'KOLSTREAM_STALL_RECOVERED' }, '*');
+            }, 3500);
+          };
+
+          video.addEventListener('waiting', handleStall);
+          video.addEventListener('stalled', handleStall);
+          video.addEventListener('playing', function() {
+            if (stallTimer) clearTimeout(stallTimer);
+          });
+        }
+
+        window.addEventListener('message', function(ev) {
+          if (!ev.data) return;
+          var hlsInst = window.hls;
+          var video = document.querySelector('video');
+
+          if (ev.data.type === 'SET_BUFFER_MODE' && hlsInst) {
+            try {
+              if (ev.data.mode === 'anti-lag') {
+                hlsInst.config.maxBufferLength = 45;
+                hlsInst.config.maxMaxBufferLength = 90;
+                hlsInst.config.liveSyncDurationCount = 7;
+                hlsInst.startLoad();
+              } else {
+                hlsInst.config.maxBufferLength = 15;
+                hlsInst.config.maxMaxBufferLength = 30;
+                hlsInst.config.liveSyncDurationCount = 3;
+              }
+            } catch(e) {}
+          } else if (ev.data.type === 'SET_QUALITY_LEVEL' && hlsInst) {
+            try {
+              if (typeof ev.data.levelIndex === 'number' && hlsInst.levels && hlsInst.levels.length > 0) {
+                hlsInst.currentLevel = Math.min(ev.data.levelIndex, hlsInst.levels.length - 1);
+              }
+            } catch(e) {}
+          } else if (ev.data.type === 'RELOAD_STREAM') {
+            if (hlsInst) {
+              try { hlsInst.startLoad(); } catch(e) {}
+            }
+            if (video) {
+              video.play().catch(function() {});
+            }
+          } else if (ev.data.type === 'TOGGLE_MUTE' && video) {
+            video.muted = !video.muted;
+          }
+        });
+
+        setInterval(function() {
+          inspectAndConnectHls();
+          setupVideoWatchdog();
+        }, 1200);
       })();
     </script>
     <style>
@@ -900,4 +1114,83 @@ app.get('/api/proxy-chunk', async (req: Request, res: Response) => {
   }
 });
 
+// SEO: robots.txt
+app.get('/robots.txt', (req: Request, res: Response) => {
+  const host = req.get('host') || 'localhost:3000';
+  const protocol = req.protocol || 'https';
+  res.setHeader('Content-Type', 'text/plain');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.send(`User-agent: *
+Allow: /
+Allow: /schedule
+Allow: /watchroom/
+Allow: /privacy
+Allow: /terms
+Allow: /dmca
+
+Sitemap: ${protocol}://${host}/sitemap.xml
+`);
+});
+
+// SEO: dynamic sitemap.xml
+app.get('/sitemap.xml', async (req: Request, res: Response) => {
+  const host = req.get('host') || 'localhost:3000';
+  const protocol = req.protocol || 'https';
+  const baseUrl = `${protocol}://${host}`;
+
+  const channels = CURATED_SPECIAL_CHANNELS;
+  const today = new Date().toISOString().split('T')[0];
+
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${baseUrl}/</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/schedule</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.9</priority>
+  </url>`;
+
+  for (const ch of channels) {
+    xml += `
+  <url>
+    <loc>${baseUrl}/watchroom/${ch.id}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>`;
+  }
+
+  xml += `
+  <url>
+    <loc>${baseUrl}/privacy</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/terms</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/dmca</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+</urlset>`;
+
+  res.setHeader('Content-Type', 'application/xml');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.send(xml);
+});
+
 export default app;
+
