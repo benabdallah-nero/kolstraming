@@ -12,13 +12,14 @@ import { FavoritesPage } from './pages/FavoritesPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { TermsPage } from './pages/TermsPage';
 import { DmcaPage } from './pages/DmcaPage';
+import { MonetagAdManager } from './components/ads/MonetagAdManager';
 
 export default function App() {
   return (
     <BrowserRouter>
       <AppProvider>
         <div
-          className="min-h-screen bg-[#08090a] text-stone-200 flex flex-col pb-20 md:pb-0 antialiased selection:bg-emerald-500/30 selection:text-white"
+          className="min-h-screen theme-canvas flex flex-col pb-20 md:pb-0 antialiased selection:bg-emerald-500/30 selection:text-white transition-colors duration-300"
           dir="rtl"
         >
           {/* Desktop Sticky Header */}
@@ -60,6 +61,9 @@ export default function App() {
 
           {/* Persistent Floating Mini-Player Pill */}
           <MiniPlayerPill />
+
+          {/* Monetag Visual Ads Manager (In-Page Push & Vignette) */}
+          <MonetagAdManager />
 
           {/* Mobile Tactile Bottom Dock */}
           <BottomDock />

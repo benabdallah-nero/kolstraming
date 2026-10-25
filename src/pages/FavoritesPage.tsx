@@ -1,11 +1,18 @@
 import React, { useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Star, Tv, ChevronLeft, ArrowRight, Play } from 'lucide-react';
+import { Star, Tv, ChevronLeft, Play, Grid, Radio } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Pagination } from '../components/Pagination';
 
 export const FavoritesPage: React.FC = () => {
-  const { channels, favorites, toggleFavorite, isFavorite, setActiveStreamingChannel } = useApp();
+  const {
+    channels,
+    favorites,
+    toggleFavorite,
+    setActiveStreamingChannel,
+    setMultiViewIds,
+    getChannelBroadcast
+  } = useApp();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -37,6 +44,15 @@ export const FavoritesPage: React.FC = () => {
     navigate(`/watchroom/${channelId}`);
   };
 
+  // Launch up to 4 favorite channels simultaneously in Multi-View
+  const handleLaunchFavoritesMultiView = () => {
+    const top4 = favoriteChannels.slice(0, 4).map(c => c.id);
+    if (top4.length > 0) {
+      setMultiViewIds(top4);
+      navigate(`/watchroom/${top4[0]}?multiview=1`);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200" dir="rtl">
       {/* Header */}
@@ -50,19 +66,32 @@ export const FavoritesPage: React.FC = () => {
             </span>
           </h1>
           <p className="text-xs text-stone-400 mt-0.5">
-            قنواتك الرياضية المختارة للوصول السريع بدون إعلانات
+            قنواتك الرياضية المختارة للوصول السريع أو التشغيل الجماعي في شاشة متعددة
           </p>
         </div>
 
         {favorites.length > 0 && (
-          <button
-            type="button"
-            onClick={() => navigate('/home')}
-            className="text-xs text-stone-300 hover:text-white flex items-center gap-1.5 self-start sm:self-auto bg-stone-900 border border-stone-800 px-3 py-1.5 rounded-xl transition"
-          >
-            <span>استعراض باقي القنوات</span>
-            <ChevronLeft className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {favorites.length >= 2 && (
+              <button
+                type="button"
+                onClick={handleLaunchFavoritesMultiView}
+                className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold text-xs flex items-center gap-1.5 shadow-md transition cursor-pointer"
+              >
+                <Grid className="w-3.5 h-3.5" />
+                <span>تشغيل المفضلة في شاشة متعددة ({Math.min(4, favorites.length)})</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => navigate('/home')}
+              className="text-xs text-stone-300 hover:text-white flex items-center gap-1.5 bg-stone-900 border border-stone-800 px-3 py-2 rounded-xl transition cursor-pointer"
+            >
+              <span>استعراض باقي القنوات</span>
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+          </div>
         )}
       </div>
 
@@ -92,52 +121,62 @@ export const FavoritesPage: React.FC = () => {
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
-            {paginatedChannels.map(channel => (
-              <div
-                key={channel.id}
-                onClick={() => handleTuneIn(channel.id)}
-                className="group relative bg-[#121316]/90 hover:bg-[#16181d] border border-stone-800/60 hover:border-amber-500/50 rounded-xl p-3 flex flex-col justify-between cursor-pointer transition-all active:scale-[0.99] shadow-sm hover:shadow-md"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono-num text-[11px] text-stone-400 bg-stone-900 border border-stone-800/80 px-2 py-0.5 rounded-md">
-                      #{channel.id}
+            {paginatedChannels.map(channel => {
+              const broadcast = getChannelBroadcast(channel.id);
+              return (
+                <div
+                  key={channel.id}
+                  onClick={() => handleTuneIn(channel.id)}
+                  className="group relative bg-[#121316]/90 hover:bg-[#16181d] border border-stone-800/60 hover:border-amber-500/50 rounded-xl p-3.5 flex flex-col justify-between cursor-pointer transition-all active:scale-[0.99] shadow-sm hover:shadow-md"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono-num text-[11px] text-stone-400 bg-stone-900 border border-stone-800/80 px-2 py-0.5 rounded-md">
+                        #{channel.id}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={e => {
+                          e.stopPropagation();
+                          toggleFavorite(channel.id);
+                        }}
+                        className="p-1.5 rounded-lg text-amber-400 hover:text-stone-400 hover:bg-stone-850 transition"
+                        title="إزالة من المفضلة"
+                        aria-label="إزالة من المفضلة"
+                      >
+                        <Star className="w-3.5 h-3.5 fill-current" />
+                      </button>
+                    </div>
+
+                    <h3 className="text-xs font-bold text-stone-100 group-hover:text-emerald-400 transition mt-2 truncate">
+                      {channel.arabicName || channel.name}
+                    </h3>
+
+                    <div className="flex items-center gap-1.5 text-[11px] text-stone-400 mt-1 font-mono-num">
+                      <span>{channel.quality || '1080p FHD'}</span>
+                      <span aria-hidden="true" className="opacity-40">·</span>
+                      <span className="font-sans">{channel.lang || 'عربي'}</span>
+                    </div>
+
+                    {broadcast && (
+                      <div className="mt-2 p-2 rounded-lg bg-stone-900/90 border border-stone-800/70 text-[11px] text-stone-300 flex items-center gap-1.5">
+                        <Radio className="w-3 h-3 text-emerald-400 shrink-0" />
+                        <span className="truncate">{broadcast.programTitle}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-3 mt-3 border-t border-stone-850/60 flex items-center justify-between text-[11px] text-stone-400 group-hover:text-emerald-400 transition">
+                    <span className="flex items-center gap-1">
+                      <Play className="w-3 h-3 fill-current text-emerald-400" />
+                      <span>تشغيل البث</span>
                     </span>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavorite(channel.id);
-                      }}
-                      className="p-1.5 rounded-lg text-amber-400 hover:text-stone-400 hover:bg-stone-850 transition"
-                      title="إزالة من المفضلة"
-                      aria-label="إزالة من المفضلة"
-                    >
-                      <Star className="w-3.5 h-3.5 fill-current" />
-                    </button>
-                  </div>
-
-                  <h3 className="text-xs font-semibold text-stone-100 group-hover:text-emerald-400 transition mt-2 truncate">
-                    {channel.arabicName || channel.name}
-                  </h3>
-
-                  <div className="flex items-center gap-1.5 text-[11px] text-stone-400 mt-1 font-mono-num">
-                    <span>{channel.quality || '1080p FHD'}</span>
-                    <span aria-hidden="true" className="opacity-40">·</span>
-                    <span className="font-sans">{channel.lang || 'عربي'}</span>
+                    <ChevronLeft className="w-3.5 h-3.5" />
                   </div>
                 </div>
-
-                <div className="pt-3 mt-3 border-t border-stone-850/60 flex items-center justify-between text-[11px] text-stone-400 group-hover:text-emerald-400 transition">
-                  <span className="flex items-center gap-1">
-                    <Play className="w-3 h-3 fill-current text-emerald-400" />
-                    <span>تشغيل البث</span>
-                  </span>
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Pagination Bar */}

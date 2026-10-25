@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import Hls from 'hls.js';
 import {
   RotateCw,
@@ -24,7 +24,17 @@ import {
   Activity,
   Radio,
   ExternalLink,
-  Volume1
+  Volume1,
+  Grid,
+  Camera,
+  Clock,
+  ChevronRight,
+  ChevronLeft,
+  BarChart2,
+  Monitor,
+  Plus,
+  X,
+  Play
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Channel, QualityResolution } from '../types';
@@ -47,10 +57,247 @@ const QUALITY_OPTIONS: QualityOptionItem[] = [
   { id: '360p', label: '360p Low-Data', sublabel: 'لشبكات الجوال الضعيفة وتوفير الباقة', badge: '360p', bitrate: '~500 Kbps' },
 ];
 
+// Independent Multi-View Cell Component for watching up to 4 live channels simultaneously
+interface MultiViewCellProps {
+  channel: Channel;
+  allChannels: Channel[];
+  isAudioActive: boolean;
+  onSelectAudio: () => void;
+  onChangeChannel: (newChannelId: number) => void;
+  onRemove?: () => void;
+  onMakeSingle: () => void;
+}
+
+const MultiViewStreamCell: React.FC<MultiViewCellProps> = ({
+  channel,
+  allChannels,
+  isAudioActive,
+  onSelectAudio,
+  onChangeChannel,
+  onRemove,
+  onMakeSingle
+}) => {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
+  const [serverMode, setServerMode] = useState<'server1' | 'server2' | 'server3'>('server1');
+  const [status, setStatus] = useState<'loading' | 'playing'>('loading');
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    setStatus('loading');
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    const srcKey = serverMode === 'server1' ? 'dembed' : serverMode === 'server2' ? 'cast' : 'wide';
+    const streamUrl = `/api/proxy-stream/${channel.id}/live.m3u8?source=${srcKey}&r=${retryCount}`;
+
+    const startPlay = () => {
+      video.muted = !isAudioActive;
+      video.volume = 1.0;
+      video
+        .play()
+        .then(() => setStatus('playing'))
+        .catch(() => {
+          video.muted = true;
+          video.play().then(() => setStatus('playing')).catch(() => setStatus('playing'));
+        });
+    };
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        maxBufferLength: 35,
+        maxMaxBufferLength: 60,
+        manifestLoadingMaxRetry: 5,
+        fragLoadingMaxRetry: 6
+      });
+      hlsRef.current = hls;
+      hls.loadSource(streamUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        startPlay();
+      });
+      hls.on(Hls.Events.ERROR, (_e, data) => {
+        if (data.fatal) {
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+        }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = streamUrl;
+      video.addEventListener('loadedmetadata', startPlay, { once: true });
+    }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [channel.id, serverMode, retryCount]);
+
+  // Sync audio mute state whenever isAudioActive toggles
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = !isAudioActive;
+      if (isAudioActive) {
+        videoRef.current.volume = 1.0;
+        videoRef.current.play().catch(() => {});
+      }
+    }
+  }, [isAudioActive]);
+
+  return (
+    <div
+      className={`relative bg-black rounded-2xl overflow-hidden border transition-all flex flex-col justify-between ${
+        isAudioActive
+          ? 'border-emerald-500 shadow-lg shadow-emerald-950/30'
+          : 'border-stone-800/90 hover:border-stone-700'
+      }`}
+    >
+      {/* Top Bar inside Cell */}
+      <div className="bg-[#101217] border-b border-stone-800/80 px-3 py-2 flex items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="font-mono-num text-[10px] text-stone-400 bg-stone-900 border border-stone-800 px-1.5 py-0.5 rounded shrink-0">
+            #{channel.id}
+          </span>
+          <select
+            value={channel.id}
+            onChange={e => onChangeChannel(Number(e.target.value))}
+            className="bg-stone-900 border border-stone-800 text-stone-100 font-bold text-xs rounded-lg px-2 py-1 truncate max-w-[180px] focus:outline-none focus:border-emerald-500"
+            aria-label="تغيير قناة الشاشة"
+          >
+            {allChannels.slice(0, 80).map(c => (
+              <option key={c.id} value={c.id}>
+                #{c.id} - {c.arabicName || c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Server Quick Cycle */}
+          {(['server1', 'server2', 'server3'] as const).map((srv, idx) => (
+            <button
+              key={srv}
+              type="button"
+              onClick={() => setServerMode(srv)}
+              className={`px-1.5 py-0.5 rounded text-[10px] font-mono-num transition cursor-pointer ${
+                serverMode === srv
+                  ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-bold'
+                  : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+              }`}
+              title={`سيرفر ${idx + 1}`}
+            >
+              S{idx + 1}
+            </button>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => setRetryCount(c => c + 1)}
+            className="p-1 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-white border border-stone-800"
+            title="إعادة تحميل هذه الشاشة"
+          >
+            <RotateCw className="w-3 h-3" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onMakeSingle}
+            className="p-1 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-white border border-stone-800"
+            title="تكبير لشاشة كاملة مفردة"
+          >
+            <Maximize2 className="w-3 h-3" />
+          </button>
+
+          {onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="p-1 rounded-lg bg-stone-900 hover:bg-rose-950/60 text-stone-400 hover:text-rose-400 border border-stone-800"
+              title="إزالة من الشاشة المتعددة"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Video Player Area */}
+      <div
+        onClick={onSelectAudio}
+        className="relative aspect-video bg-black flex items-center justify-center cursor-pointer"
+      >
+        <video
+          ref={videoRef}
+          playsInline
+          autoPlay
+          muted={!isAudioActive}
+          className="w-full h-full object-contain bg-black"
+          onPlaying={() => setStatus('playing')}
+          onWaiting={() => setStatus('loading')}
+        />
+
+        {status === 'loading' && (
+          <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-1.5 pointer-events-none">
+            <RotateCw className="w-5 h-5 animate-spin text-emerald-400" />
+            <span className="text-[11px] text-stone-300">جاري تحميل البث...</span>
+          </div>
+        )}
+
+        {/* Audio Focus Indicator Button */}
+        <button
+          type="button"
+          onClick={e => {
+            e.stopPropagation();
+            onSelectAudio();
+          }}
+          className={`absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 shadow-lg transition cursor-pointer ${
+            isAudioActive
+              ? 'bg-emerald-500 text-stone-950'
+              : 'bg-black/80 hover:bg-stone-900 text-stone-300 border border-stone-700'
+          }`}
+        >
+          {isAudioActive ? (
+            <>
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>الصوت مفعل هنا</span>
+            </>
+          ) : (
+            <>
+              <VolumeX className="w-3.5 h-3.5 text-stone-400" />
+              <span>اضغط لتشغيل صوت هذه القناة</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export const WatchRoomPage: React.FC = () => {
   const { channelId } = useParams<{ channelId?: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { channels, loadingChannels, matches, isFavorite, toggleFavorite, setActiveStreamingChannel } = useApp();
+  const {
+    channels,
+    loadingChannels,
+    matches,
+    isFavorite,
+    toggleFavorite,
+    watchHistory,
+    addToWatchHistory,
+    multiViewIds,
+    setMultiViewIds,
+    setActiveStreamingChannel
+  } = useApp();
 
   // Dynamically resolved metadata for channels opened directly via URL before or outside catalog
   const [resolvedMeta, setResolvedMeta] = useState<{ id: number; name: string; lang: string; category: Channel['category'] } | null>(null);
@@ -123,6 +370,38 @@ export const WatchRoomPage: React.FC = () => {
   const [retryKey, setRetryKey] = useState<number>(0);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
 
+  // Multi-View Mode State
+  const [isMultiViewMode, setIsMultiViewMode] = useState<boolean>(() => searchParams.get('multiview') === '1');
+  const [activeAudioSlotIndex, setActiveAudioSlotIndex] = useState<number>(0);
+
+  // Sync URL ?multiview=1 with state
+  useEffect(() => {
+    if (searchParams.get('multiview') === '1' && !isMultiViewMode) {
+      setIsMultiViewMode(true);
+    }
+  }, [searchParams, isMultiViewMode]);
+
+  // Ensure Multi-View has at least 2 channels when enabled
+  useEffect(() => {
+    if (isMultiViewMode && currentChannel) {
+      setMultiViewIds(prev => {
+        if (prev.length >= 2) return prev;
+        const firstId = currentChannel.id;
+        const secondFallback = channels.find(c => c.id !== firstId)?.id || 92;
+        return prev.length === 1
+          ? [prev[0], prev[0] === firstId ? secondFallback : firstId]
+          : [firstId, secondFallback];
+      });
+    }
+  }, [isMultiViewMode, currentChannel, channels, setMultiViewIds]);
+
+  // Pro Player Features: Aspect Ratio Fit, Telemetry HUD, Sleep Timer
+  const [videoFit, setVideoFit] = useState<'contain' | 'cover' | 'fill'>('contain');
+  const [showStatsHud, setShowStatsHud] = useState<boolean>(false);
+  const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
+  const [bufferHealthSec, setBufferHealthSec] = useState<number>(0);
+  const [liveVideoDimensions, setLiveVideoDimensions] = useState<string>('1920x1080');
+
   // Resolution & Anti-Lag Buffer Controls
   const [selectedQuality, setSelectedQuality] = useState<QualityResolution>('auto');
   const [bufferMode, setBufferMode] = useState<'anti-lag' | 'low-latency'>('anti-lag');
@@ -160,38 +439,56 @@ export const WatchRoomPage: React.FC = () => {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
 
-  // Listen to stream stats, mute state, and stall recovery events from the self-hosted clean-embed player
-  useEffect(() => {
-    const handleMsg = (e: MessageEvent) => {
-      if (!e.data) return;
-      if (e.data.type === 'KOLSTREAM_STREAM_INFO') {
-        const lvls = e.data.levels || [];
-        const isSingle = e.data.isSingleSourceBitrate || lvls.length <= 1;
-        setStreamSourceInfo({
-          isSingleBitrate: isSingle,
-          levelsCount: lvls.length,
-          currentResolution: lvls[0]?.height ? `${lvls[0].height}p FHD` : '1080p FHD'
-        });
-      } else if (e.data.type === 'KOLSTREAM_MUTE_STATE') {
-        setIsMuted(!!e.data.muted);
-        if (typeof e.data.volume === 'number') {
-          setVolume(e.data.volume);
-        }
-      } else if (e.data.type === 'KOLSTREAM_STALL_RECOVERED') {
-        setQualityToast('تم تخطي التقطيع واستئناف البث بنجاح 🛡️');
-        setTimeout(() => setQualityToast(null), 3000);
-      }
-    };
-    window.addEventListener('message', handleMsg);
-    return () => window.removeEventListener('message', handleMsg);
+  const showToast = useCallback((msg: string, duration = 2800) => {
+    setQualityToast(msg);
+    setTimeout(() => setQualityToast(null), duration);
   }, []);
 
-  // Sync active streaming channel to global context
+  // Sync active streaming channel, record in watchHistory, and scroll to player top
   useEffect(() => {
     if (currentChannel) {
       setActiveStreamingChannel(currentChannel);
+      addToWatchHistory(currentChannel.id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [currentChannel, setActiveStreamingChannel]);
+  }, [currentChannel, setActiveStreamingChannel, addToWatchHistory]);
+
+  // Sleep Timer Countdown Effect
+  useEffect(() => {
+    if (sleepTimerMinutes === null || sleepTimerMinutes <= 0) return;
+    const timer = setInterval(() => {
+      setSleepTimerMinutes(prev => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          if (videoRef.current) {
+            videoRef.current.pause();
+          }
+          showToast('🌙 انتهى مؤقت النوم وتم إيقاف البث تلقائياً', 5000);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [sleepTimerMinutes, showToast]);
+
+  // Live Telemetry Poll (updates buffer health and actual video resolution when HUD is open)
+  useEffect(() => {
+    if (!showStatsHud) return;
+    const interval = setInterval(() => {
+      const v = videoRef.current;
+      if (!v) return;
+      if (v.videoWidth && v.videoHeight) {
+        setLiveVideoDimensions(`${v.videoWidth}×${v.videoHeight}`);
+      }
+      if (v.buffered && v.buffered.length > 0) {
+        const end = v.buffered.end(v.buffered.length - 1);
+        const health = Math.max(0, end - v.currentTime);
+        setBufferHealthSec(Math.round(health * 10) / 10);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [showStatsHud]);
 
   // Check if there is an active match on this specific channel
   const currentMatch = useMemo(() => {
@@ -201,10 +498,115 @@ export const WatchRoomPage: React.FC = () => {
     );
   }, [matches, currentChannel]);
 
+  // Recently watched channels resolved from catalog
+  const recentChannelsList = useMemo(() => {
+    return watchHistory
+      .map(id => channels.find(c => c.id === id))
+      .filter((c): c is Channel => Boolean(c))
+      .slice(0, 8);
+  }, [watchHistory, channels]);
+
+  // Multi-View resolved channel objects
+  const multiViewChannels = useMemo(() => {
+    return multiViewIds.map(id => {
+      const found = channels.find(c => c.id === id);
+      if (found) return found;
+      return {
+        id,
+        name: `Channel #${id}`,
+        category: 'bein' as const,
+        quality: '1080p FHD',
+        lang: 'عربي',
+        country: 'QA'
+      };
+    });
+  }, [multiViewIds, channels]);
+
   const handleReload = useCallback(() => {
     setPlayerStatus('loading');
     setRetryKey(prev => prev + 1);
-  }, []);
+    showToast('جاري إعادة مزامنة البث المباشر...');
+  }, [showToast]);
+
+  // Jump to Live Edge of Buffer
+  const handleSyncLiveEdge = useCallback(() => {
+    const v = videoRef.current;
+    if (v && v.buffered && v.buffered.length > 0) {
+      const liveEdge = v.buffered.end(v.buffered.length - 1);
+      v.currentTime = Math.max(0, liveEdge - 0.5);
+      v.play().catch(() => {});
+      showToast('⚡ تمت المزامنة مع اللحظة المباشرة للبث');
+    } else {
+      handleReload();
+    }
+  }, [handleReload, showToast]);
+
+  // Step Next / Previous Channel (Quick Channel Zapper)
+  const handleStepChannel = useCallback(
+    (delta: number) => {
+      if (!currentChannel || channels.length === 0) return;
+      const idx = channels.findIndex(c => c.id === currentChannel.id);
+      const nextIndex = idx === -1 ? 0 : (idx + delta + channels.length) % channels.length;
+      const target = channels[nextIndex];
+      if (target) {
+        navigate(`/watchroom/${target.id}`);
+        showToast(`📺 تم الانتقال إلى: ${target.arabicName || target.name}`);
+      }
+    },
+    [currentChannel, channels, navigate, showToast]
+  );
+
+  // Capture Instant Video Frame Snapshot
+  const handleCaptureSnapshot = useCallback(() => {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth) {
+      showToast('انتظر حتى يبدأ تشغيل الفيديو لالتقاط صورة');
+      return;
+    }
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = v.videoWidth;
+      canvas.height = v.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = `kolstream-ch${currentChannel?.id || 'live'}-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast('📸 تم التقاط صورة من البث وحفظها بجودة كاملة');
+      }
+    } catch {
+      showToast('تعذر حفظ اللقطة بسبب قيود المتصفح');
+    }
+  }, [currentChannel?.id, showToast]);
+
+  // Cycle Video Fit Mode
+  const handleCycleVideoFit = useCallback(() => {
+    setVideoFit(prev => {
+      const next = prev === 'contain' ? 'cover' : prev === 'cover' ? 'fill' : 'contain';
+      const label =
+        next === 'contain' ? 'أبعاد قياسية (Contain)' : next === 'cover' ? 'ملء الشاشة الذكي (Cover)' : 'تمديد كامل (Stretch)';
+      showToast(`📐 وضع العرض: ${label}`);
+      return next;
+    });
+  }, [showToast]);
+
+  // Cycle Sleep Timer
+  const handleCycleSleepTimer = useCallback(() => {
+    setSleepTimerMinutes(prev => {
+      const next = prev === null ? 15 : prev === 15 ? 30 : prev === 30 ? 60 : null;
+      if (next === null) {
+        showToast('🌙 تم إلغاء مؤقت الإيقاف التلقائي');
+      } else {
+        showToast(`🌙 تم ضبط مؤقت النوم: إيقاف البث بعد ${next} دقيقة`);
+      }
+      return next;
+    });
+  }, [showToast]);
 
   const handleToggleFullscreen = useCallback(() => {
     const el = containerRef.current;
@@ -240,9 +642,8 @@ export const WatchRoomPage: React.FC = () => {
     if (iframeRef.current?.contentWindow) {
       iframeRef.current.contentWindow.postMessage({ type: 'SET_MUTE', muted: false }, '*');
     }
-    setQualityToast('🔊 تم تشغيل صوت البث المباشر');
-    setTimeout(() => setQualityToast(null), 2500);
-  }, [volume]);
+    showToast('🔊 تم تشغيل صوت البث المباشر');
+  }, [volume, showToast]);
 
   const handleToggleMute = useCallback(() => {
     if (isMuted) {
@@ -278,16 +679,15 @@ export const WatchRoomPage: React.FC = () => {
     try {
       if (document.pictureInPictureElement) {
         await document.exitPictureInPicture();
-        setQualityToast('تم إغلاق نافذة صورة داخل صورة');
+        showToast('تم إغلاق نافذة صورة داخل صورة');
       } else if (videoRef.current && document.pictureInPictureEnabled) {
         await videoRef.current.requestPictureInPicture();
-        setQualityToast('تم تفعيل وضع صورة داخل صورة (PiP)');
+        showToast('تم تفعيل وضع صورة داخل صورة (PiP)');
       }
     } catch {
-      setQualityToast('ميزة صورة داخل صورة تتطلب تشغيل الفيديو أولاً');
+      showToast('ميزة صورة داخل صورة تتطلب تشغيل الفيديو أولاً');
     }
-    setTimeout(() => setQualityToast(null), 3000);
-  }, []);
+  }, [showToast]);
 
   const handleToggleAudioBoost = useCallback(() => {
     setIsAudioBoosted(prev => {
@@ -319,11 +719,10 @@ export const WatchRoomPage: React.FC = () => {
           videoRef.current.volume = 1.0;
         }
       }
-      setQualityToast(next ? '🔊 تم تفعيل مضخم صوت التعليق (+80%)' : 'تمت استعادة مستوى الصوت القياسي');
-      setTimeout(() => setQualityToast(null), 3000);
+      showToast(next ? '🔊 تم تفعيل مضخم صوت التعليق (+80%)' : 'تمت استعادة مستوى الصوت القياسي');
       return next;
     });
-  }, [volume]);
+  }, [volume, showToast]);
 
   const handleCopyShareLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -367,9 +766,7 @@ export const WatchRoomPage: React.FC = () => {
     applyQualityToHls(quality);
 
     const opt = QUALITY_OPTIONS.find(q => q.id === quality);
-    const msg = `تم ضبط الجودة: ${opt?.label || quality}`;
-    setQualityToast(msg);
-    setTimeout(() => setQualityToast(null), 3000);
+    showToast(`تم ضبط الجودة: ${opt?.label || quality}`);
   };
 
   // Toggle Buffer Anti-Lag Mode
@@ -388,18 +785,19 @@ export const WatchRoomPage: React.FC = () => {
       }
     }
 
-    const msg = mode === 'anti-lag'
-      ? 'تم تفعيل وضع التخزين المؤقت المانع للتقطيع (Buffer Boost 45s)'
-      : 'تم تفعيل وضع البث المباشر الفوري اللحظي';
-    setQualityToast(msg);
-    setTimeout(() => setQualityToast(null), 3500);
+    const msg =
+      mode === 'anti-lag'
+        ? 'تم تفعيل وضع التخزين المؤقت المانع للتقطيع (Buffer Boost 45s)'
+        : 'تم تفعيل وضع البث المباشر الفوري اللحظي';
+    showToast(msg, 3500);
   };
 
-  // Keyboard Shortcuts Listener (f = fullscreen, t = theater, r = reload, m = mute)
+  // Keyboard Shortcuts Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeTag = document.activeElement?.tagName.toLowerCase();
-      if (activeTag === 'input' || activeTag === 'textarea') return;
+      if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') return;
+      if (e.metaKey || e.ctrlKey) return;
 
       if (e.key === 't' || e.key === 'T' || e.key === 'ف') {
         e.preventDefault();
@@ -413,6 +811,12 @@ export const WatchRoomPage: React.FC = () => {
       } else if (e.key === 'm' || e.key === 'M' || e.key === 'ة') {
         e.preventDefault();
         handleToggleMute();
+      } else if (e.key === 's' || e.key === 'S' || e.key === 'س') {
+        e.preventDefault();
+        handleCaptureSnapshot();
+      } else if (e.key === 'i' || e.key === 'I' || e.key === 'ه') {
+        e.preventDefault();
+        setShowStatsHud(prev => !prev);
       } else if (e.key === 'Escape') {
         setQualityMenuOpen(false);
         if (isTheaterMode) setIsTheaterMode(false);
@@ -421,11 +825,18 @@ export const WatchRoomPage: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleToggleTheaterMode, handleToggleFullscreen, handleReload, handleToggleMute, isTheaterMode]);
+  }, [
+    handleToggleTheaterMode,
+    handleToggleFullscreen,
+    handleReload,
+    handleToggleMute,
+    handleCaptureSnapshot,
+    isTheaterMode
+  ]);
 
-  // Unified Direct HLS Video Engine for both Server 1 (المشغل النظيف المحمي) and Server 2 (السيرفر الاحتياطي)
+  // Unified Direct HLS Video Engine for Single Stream Mode (Server 1 = dembed, Server 2 = cast, Server 3 = wide)
   useEffect(() => {
-    if (!currentChannel) {
+    if (!currentChannel || isMultiViewMode) {
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
@@ -528,12 +939,12 @@ export const WatchRoomPage: React.FC = () => {
         hlsRef.current = null;
       }
     };
-  }, [currentChannel?.id, retryKey, playerMode, applyQualityToHls, selectedQuality, bufferMode]);
+  }, [currentChannel?.id, retryKey, playerMode, applyQualityToHls, selectedQuality, bufferMode, isMultiViewMode]);
 
   // Direct Video stall watchdog
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || isMultiViewMode) return;
 
     let stallTimeout: any = null;
     const onWaitingOrStalled = () => {
@@ -546,8 +957,7 @@ export const WatchRoomPage: React.FC = () => {
           }
         }
         video.play().catch(() => {});
-        setQualityToast('تم تخطي التقطيع واستئناف البث تلقائياً 🛡️');
-        setTimeout(() => setQualityToast(null), 3000);
+        showToast('تم تخطي التقطيع واستئناف البث تلقائياً 🛡️');
       }, 3500);
     };
 
@@ -565,16 +975,17 @@ export const WatchRoomPage: React.FC = () => {
       video.removeEventListener('stalled', onWaitingOrStalled);
       video.removeEventListener('playing', onPlaying);
     };
-  }, [playerMode]);
+  }, [playerMode, isMultiViewMode, showToast]);
 
   // In-room channel switcher filtering
   const filteredSwitcherChannels = useMemo(() => {
     if (!switcherSearch.trim()) return channels;
     const q = switcherSearch.toLowerCase().trim();
-    return channels.filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      (c.arabicName && c.arabicName.toLowerCase().includes(q)) ||
-      String(c.id).includes(q)
+    return channels.filter(
+      c =>
+        c.name.toLowerCase().includes(q) ||
+        (c.arabicName && c.arabicName.toLowerCase().includes(q)) ||
+        String(c.id).includes(q)
     );
   }, [channels, switcherSearch]);
 
@@ -608,6 +1019,20 @@ export const WatchRoomPage: React.FC = () => {
     );
   }
 
+  const toggleMultiViewLayout = () => {
+    const next = !isMultiViewMode;
+    setIsMultiViewMode(next);
+    const params = new URLSearchParams(searchParams);
+    if (next) {
+      params.set('multiview', '1');
+      showToast('📺 تم تفعيل وضع الشاشة المتعددة (Multi-View)');
+    } else {
+      params.delete('multiview');
+      showToast('تمت العودة لوضع الشاشة المفردة الكاملة');
+    }
+    setSearchParams(params, { replace: true });
+  };
+
   return (
     <div
       className={`space-y-3 animate-in fade-in duration-200 transition-all ${
@@ -615,7 +1040,7 @@ export const WatchRoomPage: React.FC = () => {
       }`}
       dir="rtl"
     >
-      {/* Toast Feedback for Quality Downgrade or Buffer Mode */}
+      {/* Toast Feedback */}
       {qualityToast && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-stone-900/95 border border-emerald-500/50 text-emerald-400 px-4 py-2 rounded-xl text-xs font-semibold shadow-2xl backdrop-blur-md animate-in slide-in-from-top-2 duration-200 flex items-center gap-2">
           <Check className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -623,508 +1048,546 @@ export const WatchRoomPage: React.FC = () => {
         </div>
       )}
 
-      {/* Theater Video Viewport Container (Direct HTML5 Video with Zero Iframe Audio Blocking) */}
-      <div
-        ref={containerRef}
-        onClick={() => {
-          if (isMuted) {
-            handleForceUnmute();
-          }
-        }}
-        className={`relative w-full bg-black rounded-2xl overflow-hidden border border-stone-800/80 shadow-2xl flex items-center justify-center transition-all duration-300 ${
-          isTheaterMode ? 'aspect-[16/9] sm:aspect-[21/9] max-h-[75vh]' : 'aspect-video'
-        }`}
-      >
-        <video
-          ref={videoRef}
-          controls
-          autoPlay
-          playsInline
-          onVolumeChange={e => {
-            const v = e.currentTarget;
-            setIsMuted(v.muted || v.volume === 0);
-            setVolume(v.volume);
-          }}
-          className="w-full h-full object-contain bg-black"
-          onPlaying={() => setPlayerStatus('playing')}
-          onWaiting={() => setPlayerStatus('loading')}
-        />
+      {/* 1. VIDEO PLAYER FIRST — Top of Page on Mobile & Desktop */}
+      {isMultiViewMode ? (
+        <div className="space-y-3">
+          {/* Multi-View Header Bar */}
+          <div className="theme-surface border theme-border rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="text-xs font-bold text-stone-100">
+                الشاشة المتعددة ({multiViewChannels.length}/4 قنوات)
+              </span>
+            </div>
 
-        {/* Prominent Floating Unmute Banner on ANY Server when Muted */}
-        {isMuted && (
-          <button
-            type="button"
-            onClick={e => {
-              e.stopPropagation();
-              handleForceUnmute();
-            }}
-            className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-emerald-500 hover:bg-emerald-400 text-stone-950 border-2 border-emerald-200 px-5 py-2.5 rounded-full text-xs sm:text-sm font-extrabold shadow-2xl flex items-center gap-2 transition hover:scale-105 cursor-pointer animate-bounce"
-          >
-            <Volume2 className="w-4 h-4" />
-            <span>🔊 اضغط هنا لتشغيل صوت البث (Unmute)</span>
-          </button>
-        )}
-
-        {/* Live Match Scoreboard Overlay (When Match is broadcast on this channel) */}
-        {currentMatch && (
-          <div className="absolute top-3 right-3 max-w-xs sm:max-w-md z-20 pointer-events-none">
-            <div className="bg-[#0b0c0e]/90 backdrop-blur-md border border-stone-700/60 rounded-xl p-2.5 shadow-xl flex items-center justify-between gap-3 pointer-events-auto">
-              <div className="flex items-center gap-2 min-w-0">
-                {currentMatch.status === 'LIVE' ? (
-                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0"></span>
-                ) : (
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-                )}
-                <div className="min-w-0">
-                  <div className="text-[11px] font-bold text-stone-100 truncate">
-                    {currentMatch.teamA.name} vs {currentMatch.teamB.name}
-                  </div>
-                  <div className="text-[10px] text-stone-400 truncate">
-                    {currentMatch.competition} · {currentMatch.statusText || currentMatch.minute || currentMatch.time}
-                  </div>
-                </div>
-              </div>
-
-              {currentMatch.scoreA !== null && currentMatch.scoreB !== null && (
-                <div className="px-2 py-0.5 rounded bg-stone-900 border border-stone-800 font-mono-num font-extrabold text-xs text-emerald-400 shrink-0">
-                  {currentMatch.scoreA} - {currentMatch.scoreB}
-                </div>
+            <div className="flex items-center gap-2">
+              {multiViewIds.length < 4 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const unused = channels.find(c => !multiViewIds.includes(c.id));
+                    if (unused) {
+                      setMultiViewIds(prev => [...prev, unused.id]);
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold text-xs flex items-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>إضافة قناة</span>
+                </button>
               )}
+              <button
+                type="button"
+                onClick={toggleMultiViewLayout}
+                className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-300 text-xs cursor-pointer whitespace-nowrap shrink-0"
+              >
+                إغلاق الشاشة المتعددة
+              </button>
             </div>
           </div>
-        )}
 
-        {/* Loading State */}
-        {playerStatus === 'loading' && (
-          <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-stone-400 gap-2 z-10 pointer-events-none">
-            <RotateCw className="w-6 h-6 animate-spin text-emerald-400" />
-            <span className="text-xs text-stone-300 font-medium">جاري مزامنة البث المباشر...</span>
-          </div>
-        )}
-      </div>
-
-      {/* Dedicated Audio, Volume, Server & Viewport Control Bar (Directly below video player!) */}
-      <div className="bg-[#121316]/95 border border-stone-800/80 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3">
-        {/* Left group: Prominent Sound / Unmute Controls & Volume Slider */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={handleToggleMute}
-            className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition shadow-md cursor-pointer ${
-              isMuted
-                ? 'bg-emerald-500 hover:bg-emerald-400 text-stone-950 animate-pulse'
-                : 'bg-stone-900 hover:bg-stone-800 text-stone-200 border border-stone-700'
-            }`}
-            title="تشغيل أو كتم الصوت [M]"
-          >
-            {isMuted ? (
-              <>
-                <VolumeX className="w-4 h-4 text-stone-950" />
-                <span>🔊 تشغيل الصوت (Unmute)</span>
-              </>
-            ) : (
-              <>
-                <Volume2 className="w-4 h-4 text-emerald-400" />
-                <span>الصوت يعمل (كتم)</span>
-              </>
-            )}
-          </button>
-
-          {/* Interactive Volume Slider */}
-          <div className="flex items-center gap-2 bg-stone-900 border border-stone-800 px-3 py-1.5 rounded-xl">
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={isMuted ? 0 : volume}
-              onChange={e => handleVolumeChange(parseFloat(e.target.value))}
-              className="w-20 sm:w-24 accent-emerald-500 cursor-pointer h-1.5 bg-stone-700 rounded-lg"
-              aria-label="مستوى الصوت"
-              title="التحكم بمستوى الصوت"
-            />
-            <span className="text-[11px] font-mono-num text-stone-300 w-8 text-left">
-              {isMuted ? '0%' : `${Math.round(volume * 100)}%`}
-            </span>
-          </div>
-
-          {/* Commentary Audio Booster (+80%) */}
-          <button
-            type="button"
-            onClick={handleToggleAudioBoost}
-            className={`px-3 py-2 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 cursor-pointer ${
-              isAudioBoosted
-                ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 font-bold'
-                : 'bg-stone-900 hover:bg-stone-850 border-stone-800 text-stone-300 hover:text-white'
-            }`}
-            title="مضخم صوت المعلق (+80%)"
-          >
-            <Volume1 className="w-3.5 h-3.5 text-amber-400" />
-            <span>{isAudioBoosted ? 'مضخم الصوت نشط (+80%)' : 'تقوية صوت المعلق'}</span>
-          </button>
-        </div>
-
-        {/* Right group: 3 Distinct Upstream Servers & Viewport Actions */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] font-bold text-stone-400 hidden sm:inline">سيرفرات البث:</span>
-          {/* Server 1: Dembed Edge CDN */}
-          <button
-            type="button"
-            onClick={() => {
-              setPlayerMode('server1');
-              setQualityToast('تم التبديل إلى سيرفر 1 (المشغل النظيف المحمي - Dembed FHD)');
-              setTimeout(() => setQualityToast(null), 2500);
-            }}
-            className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shrink-0 text-xs cursor-pointer ${
-              playerMode === 'server1'
-                ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 font-bold shadow-sm'
-                : 'bg-stone-900 hover:bg-stone-850 border border-stone-800 text-stone-400 hover:text-stone-200'
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>سيرفر 1 (المشغل النظيف المحمي)</span>
-          </button>
-
-          {/* Server 2: Cast Independent CDN */}
-          <button
-            type="button"
-            onClick={() => {
-              setPlayerMode('server2');
-              setQualityToast('تم التبديل إلى سيرفر 2 (سيرفر Cast المستقل)');
-              setTimeout(() => setQualityToast(null), 2500);
-            }}
-            className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shrink-0 text-xs cursor-pointer ${
-              playerMode === 'server2'
-                ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 font-bold shadow-sm'
-                : 'bg-stone-900 hover:bg-stone-850 border border-stone-800 text-stone-400 hover:text-stone-200'
-            }`}
-          >
-            <Radio className="w-3.5 h-3.5 text-blue-400" />
-            <span>سيرفر 2 (سيرفر Cast البديل)</span>
-          </button>
-
-          {/* Server 3: WideIPTV Backup CDN */}
-          <button
-            type="button"
-            onClick={() => {
-              setPlayerMode('server3');
-              setQualityToast('تم التبديل إلى سيرفر 3 (سيرفر Wide الاحتياطي)');
-              setTimeout(() => setQualityToast(null), 2500);
-            }}
-            className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shrink-0 text-xs cursor-pointer ${
-              playerMode === 'server3'
-                ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 font-bold shadow-sm'
-                : 'bg-stone-900 hover:bg-stone-850 border border-stone-800 text-stone-400 hover:text-stone-200'
-            }`}
-          >
-            <Tv className="w-3.5 h-3.5 text-amber-400" />
-            <span>سيرفر 3 (الاحتياطي Wide)</span>
-          </button>
-
-          {/* Picture in Picture */}
-          <button
-            type="button"
-            onClick={handleTogglePiP}
-            className="p-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-stone-300 hover:text-white border border-stone-800 transition"
-            title="صورة داخل صورة (PiP)"
-          >
-            <ExternalLink className="w-4 h-4" />
-          </button>
-
-          {/* Theater Mode */}
-          <button
-            type="button"
-            onClick={handleToggleTheaterMode}
-            className={`p-2 rounded-xl border transition ${
-              isTheaterMode
-                ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-400'
-                : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-300 hover:text-white'
-            }`}
-            title="وضع المسرح السينمائي [T]"
-          >
-            {isTheaterMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
-
-          {/* Fullscreen */}
-          <button
-            type="button"
-            onClick={handleToggleFullscreen}
-            className="p-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-stone-300 hover:text-white border border-stone-800 transition"
-            title="ملء الشاشة [F]"
-          >
-            <Maximize className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Channel Header & Interactive Controls Bar */}
-      <div className="bg-[#121316]/95 border border-stone-800/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono-num text-xs font-bold text-stone-400 bg-stone-900 border border-stone-800 px-2 py-0.5 rounded-md">
-              #{currentChannel.id}
-            </span>
-            <h1 className="text-base font-bold text-stone-100">
-              {currentChannel.arabicName || currentChannel.name}
-            </h1>
-            <span className="text-[11px] text-emerald-400 font-medium bg-emerald-950/60 border border-emerald-800/40 px-2 py-0.2 rounded-full">
-              بث مباشر
-            </span>
-            {isTheaterMode && (
-              <span className="text-[10px] text-stone-400 bg-stone-900 border border-stone-800 px-2 py-0.2 rounded-md">
-                وضع المسرح السينمائي
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 text-xs text-stone-400 mt-1 font-mono-num">
-            <span>{streamSourceInfo.currentResolution}</span>
-            <span aria-hidden="true" className="opacity-40">·</span>
-            <span className="font-sans">{currentChannel.lang || 'عربي'}</span>
-            <span aria-hidden="true" className="opacity-40">·</span>
-            <span className="font-sans text-emerald-400 flex items-center gap-1">
-              <Activity className="w-3 h-3 text-emerald-400" />
-              <span>مستقر</span>
-            </span>
+          {/* 2x2 or 2-Column Live Video Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {multiViewChannels.map((ch, idx) => (
+              <MultiViewStreamCell
+                key={`${idx}-${ch.id}`}
+                channel={ch}
+                allChannels={channels}
+                isAudioActive={activeAudioSlotIndex === idx}
+                onSelectAudio={() => setActiveAudioSlotIndex(idx)}
+                onChangeChannel={newId => {
+                  setMultiViewIds(prev => prev.map((oldId, i) => (i === idx ? newId : oldId)));
+                }}
+                onRemove={
+                  multiViewChannels.length > 2
+                    ? () => {
+                        setMultiViewIds(prev => prev.filter((_, i) => i !== idx));
+                        if (activeAudioSlotIndex === idx) setActiveAudioSlotIndex(0);
+                      }
+                    : undefined
+                }
+                onMakeSingle={() => {
+                  setIsMultiViewMode(false);
+                  const params = new URLSearchParams(searchParams);
+                  params.delete('multiview');
+                  setSearchParams(params, { replace: true });
+                  navigate(`/watchroom/${ch.id}`);
+                }}
+              />
+            ))}
           </div>
         </div>
+      ) : (
+        /* SINGLE STREAM THEATER — Immediately visible at top of mobile & desktop */
+        <div
+          ref={containerRef}
+          onClick={() => {
+            if (isMuted) {
+              handleForceUnmute();
+            }
+          }}
+          className={`relative w-full bg-black rounded-2xl overflow-hidden border theme-border shadow-2xl flex items-center justify-center transition-all duration-300 ${
+            isTheaterMode ? 'aspect-[16/9] sm:aspect-[21/9] max-h-[75vh]' : 'aspect-video'
+          }`}
+        >
+          <video
+            ref={videoRef}
+            controls
+            autoPlay
+            playsInline
+            onVolumeChange={e => {
+              const v = e.currentTarget;
+              setIsMuted(v.muted || v.volume === 0);
+              setVolume(v.volume);
+            }}
+            className={`w-full h-full bg-black ${
+              videoFit === 'cover' ? 'object-cover' : videoFit === 'fill' ? 'object-fill' : 'object-contain'
+            }`}
+            onPlaying={() => setPlayerStatus('playing')}
+            onWaiting={() => setPlayerStatus('loading')}
+          />
 
-        {/* Viewport Control Actions */}
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap relative">
-          {/* Quality & Anti-Lag Settings Dropdown */}
-          <div className="relative">
+          {/* Prominent Floating Unmute Banner when Muted */}
+          {isMuted && (
             <button
               type="button"
-              onClick={() => setQualityMenuOpen(prev => !prev)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-900 border border-stone-800 hover:border-stone-700 text-xs text-stone-200 transition shadow-sm"
-              title="خيارات الجودة ومنع التقطيع"
+              onClick={e => {
+                e.stopPropagation();
+                handleForceUnmute();
+              }}
+              className="absolute top-3 left-1/2 -translate-x-1/2 z-30 bg-emerald-500 hover:bg-emerald-400 text-stone-950 border border-emerald-200 px-4 py-2 rounded-full text-xs sm:text-sm font-extrabold shadow-2xl flex items-center gap-2 transition hover:scale-105 cursor-pointer whitespace-nowrap"
             >
-              <Sliders className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="font-medium">الجودة والاستقرار</span>
-              <span className="font-mono-num font-bold text-emerald-400">
-                {bufferMode === 'anti-lag' ? '🛡️ مانع التقطيع' : '⚡ مباشر'}
+              <Volume2 className="w-4 h-4 shrink-0" />
+              <span>اضغط لتشغيل صوت البث</span>
+            </button>
+          )}
+
+          {/* Optional Technical Stats Overlay (Only when explicitly toggled) */}
+          {showStatsHud && (
+            <div
+              onClick={e => e.stopPropagation()}
+              className="absolute top-3 left-3 z-20 bg-[#0b0c10]/90 backdrop-blur-md border border-stone-700/80 rounded-xl p-3 text-[11px] text-stone-300 space-y-1.5 shadow-2xl w-60 font-mono-num"
+            >
+              <div className="flex items-center justify-between border-b border-stone-800 pb-1">
+                <span className="font-sans font-bold text-emerald-400 flex items-center gap-1">
+                  <Activity className="w-3.5 h-3.5" />
+                  <span>معلومات البث</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowStatsHud(false)}
+                  className="text-stone-400 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-sans text-stone-400">السيرفر:</span>
+                <span className="text-stone-100 font-bold">
+                  {playerMode === 'server1' ? 'Dembed FHD' : playerMode === 'server2' ? 'Cast CDN' : 'WideIPTV'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-sans text-stone-400">الأبعاد:</span>
+                <span className="text-emerald-400">{liveVideoDimensions}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-sans text-stone-400">التخزين المؤقت:</span>
+                <span className="text-stone-100">{bufferHealthSec}s</span>
+              </div>
+            </div>
+          )}
+
+          {/* Compact Live Match Score Overlay */}
+          {currentMatch && (
+            <div className="absolute top-3 right-3 max-w-[240px] sm:max-w-xs z-20 pointer-events-none">
+              <div className="bg-black/80 backdrop-blur-md border border-white/10 rounded-xl px-2.5 py-1.5 shadow-xl flex items-center justify-between gap-2.5 pointer-events-auto">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${
+                      currentMatch.status === 'LIVE' ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'
+                    }`}
+                  />
+                  <span className="text-[11px] font-bold text-white truncate">
+                    {currentMatch.teamA.name} ضد {currentMatch.teamB.name}
+                  </span>
+                </div>
+                {currentMatch.scoreA !== null && currentMatch.scoreB !== null && (
+                  <span className="px-1.5 py-0.5 rounded bg-white/10 font-mono-num font-extrabold text-[11px] text-emerald-400 shrink-0">
+                    {currentMatch.scoreA} - {currentMatch.scoreB}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Loading State */}
+          {playerStatus === 'loading' && (
+            <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center text-stone-300 gap-2 z-10 pointer-events-none">
+              <RotateCw className="w-6 h-6 animate-spin text-emerald-400" />
+              <span className="text-xs font-medium">جاري تشغيل البث المباشر...</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 2. COMPACT STREAM BAR — Channel Title, 3 Servers & Optional Collapsible Settings */}
+      {!isMultiViewMode && (
+        <div className="theme-surface border theme-border rounded-2xl p-3 space-y-2.5">
+          {/* Row A: Channel Identity + Essential One-Tap Icons */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-mono-num text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-lg shrink-0">
+                #{currentChannel.id}
               </span>
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-base font-extrabold text-stone-100 truncate">
+                  {currentChannel.arabicName || currentChannel.name}
+                </h1>
+                <div className="flex items-center gap-1.5 text-[11px] text-stone-400">
+                  <span>{streamSourceInfo.currentResolution}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{currentChannel.lang || 'عربي'}</span>
+                  {sleepTimerMinutes !== null && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span className="text-amber-400 font-mono-num">مؤقت: {sleepTimerMinutes}د</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Essential Actions (Unmute, Reload, Favorite, Fullscreen, Settings Drawer Trigger) */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleToggleMute}
+                className={`min-h-[38px] px-3 rounded-xl font-bold text-xs flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 ${
+                  isMuted
+                    ? 'bg-emerald-500 hover:bg-emerald-400 text-stone-950 shadow-md'
+                    : 'bg-stone-900 hover:bg-stone-800 text-stone-200 border border-stone-800'
+                }`}
+                title="تشغيل أو كتم الصوت"
+              >
+                {isMuted ? (
+                  <>
+                    <VolumeX className="w-4 h-4 text-stone-950" />
+                    <span>تشغيل الصوت</span>
+                  </>
+                ) : (
+                  <Volume2 className="w-4 h-4 text-emerald-400" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleReload}
+                className="min-h-[38px] min-w-[38px] rounded-xl bg-stone-900 hover:bg-stone-800 border border-stone-800 text-stone-300 hover:text-white flex items-center justify-center transition cursor-pointer"
+                title="تحديث البث"
+                aria-label="تحديث البث"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => toggleFavorite(currentChannel.id)}
+                className={`min-h-[38px] min-w-[38px] rounded-xl border flex items-center justify-center transition cursor-pointer ${
+                  isFavorite(currentChannel.id)
+                    ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
+                    : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-400 hover:text-white'
+                }`}
+                title="إضافة للمفضلة"
+                aria-label="المفضلة"
+              >
+                <Star className={`w-4 h-4 ${isFavorite(currentChannel.id) ? 'fill-current' : ''}`} />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleFullscreen}
+                className="min-h-[38px] min-w-[38px] rounded-xl bg-stone-900 hover:bg-stone-800 border border-stone-800 text-stone-300 hover:text-white hidden sm:flex items-center justify-center transition cursor-pointer"
+                title="ملء الشاشة"
+                aria-label="ملء الشاشة"
+              >
+                <Maximize className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setQualityMenuOpen(prev => !prev)}
+                className={`min-h-[38px] px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 ${
+                  qualityMenuOpen
+                    ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
+                    : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-300 hover:text-white'
+                }`}
+                title="إعدادات البث المتقدمة"
+              >
+                <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden xs:inline sm:inline">الإعدادات</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Row B: Clean Single-Row 3-Server Segmented Switcher */}
+          <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-stone-800/60">
+            <button
+              type="button"
+              onClick={() => {
+                setPlayerMode('server1');
+                showToast('تم التبديل إلى سيرفر 1 (الرئيسي FHD)');
+              }}
+              className={`min-h-[38px] px-2 py-1.5 rounded-xl transition flex items-center justify-center gap-1.5 text-xs font-bold cursor-pointer whitespace-nowrap ${
+                playerMode === 'server1'
+                  ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 shadow-sm'
+                  : 'bg-stone-900/80 hover:bg-stone-800 border border-stone-800/80 text-stone-400 hover:text-stone-200'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="truncate">سيرفر 1 (الرئيسي)</span>
             </button>
 
-            {/* Quality & Anti-Lag Popover */}
-            {qualityMenuOpen && (
-              <div className="absolute left-0 sm:right-0 sm:left-auto top-full mt-2 w-80 bg-[#121316] border border-stone-700/80 rounded-2xl shadow-2xl p-3 z-30 space-y-3 animate-in fade-in zoom-in-95 duration-150 text-right">
-                {/* Header */}
-                <div className="pb-2 border-b border-stone-800 flex items-center justify-between">
-                  <span className="font-bold text-xs text-stone-200 flex items-center gap-1.5">
-                    <Sliders className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>إعدادات استقرار البث والجودة</span>
-                  </span>
-                  <span className="text-[10px] text-emerald-400 font-mono-num">
-                    {streamSourceInfo.currentResolution}
-                  </span>
-                </div>
+            <button
+              type="button"
+              onClick={() => {
+                setPlayerMode('server2');
+                showToast('تم التبديل إلى سيرفر 2 (Cast البديل)');
+              }}
+              className={`min-h-[38px] px-2 py-1.5 rounded-xl transition flex items-center justify-center gap-1.5 text-xs font-bold cursor-pointer whitespace-nowrap ${
+                playerMode === 'server2'
+                  ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 shadow-sm'
+                  : 'bg-stone-900/80 hover:bg-stone-800 border border-stone-800/80 text-stone-400 hover:text-stone-200'
+              }`}
+            >
+              <Radio className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <span className="truncate">سيرفر 2 (Cast)</span>
+            </button>
 
-                {/* Section: Stream Source Truth */}
-                <div className="p-2.5 rounded-xl bg-stone-900/90 border border-stone-800 text-[11px] space-y-1.5">
-                  <div className="font-bold text-stone-300 flex items-center gap-1.5">
-                    <Info className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                    <span>حالة جودة السيرفر المصدر:</span>
-                  </div>
-                  <p className="text-stone-400 leading-relaxed text-[10px]">
-                    {streamSourceInfo.isSingleBitrate
-                      ? 'يبث المصدر القناة بدقة أصلية واحدة (1080p FHD). عند ضعف الإنترنت، تفعيل "مانع التقطيع" يضاعف التخزين المسبق لمنع التوقف.'
-                      : `يوفر المصدر (${streamSourceInfo.levelsCount}) مسارات للدقة، يمكنك التبديل بينها أدناه.`}
-                  </p>
-                </div>
+            <button
+              type="button"
+              onClick={() => {
+                setPlayerMode('server3');
+                showToast('تم التبديل إلى سيرفر 3 (Wide الاحتياطي)');
+              }}
+              className={`min-h-[38px] px-2 py-1.5 rounded-xl transition flex items-center justify-center gap-1.5 text-xs font-bold cursor-pointer whitespace-nowrap ${
+                playerMode === 'server3'
+                  ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 shadow-sm'
+                  : 'bg-stone-900/80 hover:bg-stone-800 border border-stone-800/80 text-stone-400 hover:text-stone-200'
+              }`}
+            >
+              <Tv className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="truncate">سيرفر 3 (Wide)</span>
+            </button>
+          </div>
 
-                {/* Section: Anti-Lag Buffer Modes */}
-                <div className="space-y-1.5">
-                  <div className="text-[11px] font-bold text-stone-300">
-                    أوضاع منع التقطيع (Buffer Control):
-                  </div>
+          {/* Collapsible Advanced Settings Drawer (Hidden by default so mobile stays clean!) */}
+          {qualityMenuOpen && (
+            <div className="pt-3 mt-2 border-t border-stone-800 space-y-3 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-stone-200 flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>إعدادات البث المتقدمة وأدوات المشغل</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setQualityMenuOpen(false)}
+                  className="text-xs text-stone-400 hover:text-white px-2 py-0.5 rounded-lg bg-stone-900 border border-stone-800 cursor-pointer"
+                >
+                  إغلاق ✕
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* Group 1: Quality & Anti-Lag Buffer */}
+                <div className="p-3 rounded-xl bg-stone-900/80 border border-stone-800/80 space-y-2">
+                  <div className="text-[11px] font-bold text-stone-300">الجودة ومنع التقطيع</div>
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
                       type="button"
                       onClick={() => handleToggleBufferMode('anti-lag')}
-                      className={`p-2 rounded-xl text-right border transition text-xs space-y-0.5 ${
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer ${
                         bufferMode === 'anti-lag'
-                          ? 'bg-emerald-500/15 border-emerald-500/60 text-emerald-300 font-bold'
-                          : 'bg-stone-900 hover:bg-stone-850 border-stone-800 text-stone-400'
+                          ? 'bg-emerald-500/15 border-emerald-500/60 text-emerald-300'
+                          : 'bg-stone-950 border-stone-800 text-stone-400'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold">مانع التقطيع</span>
-                        {bufferMode === 'anti-lag' && <Check className="w-3 h-3 text-emerald-400" />}
-                      </div>
-                      <div className="text-[9px] text-stone-500">تخزين مؤقت 45s</div>
+                      🛡️ مانع التقطيع
                     </button>
-
                     <button
                       type="button"
                       onClick={() => handleToggleBufferMode('low-latency')}
-                      className={`p-2 rounded-xl text-right border transition text-xs space-y-0.5 ${
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer ${
                         bufferMode === 'low-latency'
-                          ? 'bg-emerald-500/15 border-emerald-500/60 text-emerald-300 font-bold'
-                          : 'bg-stone-900 hover:bg-stone-850 border-stone-800 text-stone-400'
+                          ? 'bg-emerald-500/15 border-emerald-500/60 text-emerald-300'
+                          : 'bg-stone-950 border-stone-800 text-stone-400'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold">بث لحظي فوري</span>
-                        {bufferMode === 'low-latency' && <Check className="w-3 h-3 text-emerald-400" />}
-                      </div>
-                      <div className="text-[9px] text-stone-500">تأخير أدنى</div>
+                      ⚡ بث فوري لحظي
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1 flex-wrap pt-1">
+                    {QUALITY_OPTIONS.map(opt => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => handleSelectQuality(opt.id)}
+                        className={`px-2 py-1 rounded-lg text-[11px] font-mono-num border transition cursor-pointer ${
+                          selectedQuality === opt.id
+                            ? 'bg-emerald-500 text-stone-950 border-emerald-400 font-bold'
+                            : 'bg-stone-950 border-stone-800 text-stone-300 hover:text-white'
+                        }`}
+                      >
+                        {opt.badge}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Group 2: Audio & Display Controls */}
+                <div className="p-3 rounded-xl bg-stone-900/80 border border-stone-800/80 space-y-2">
+                  <div className="text-[11px] font-bold text-stone-300">الصوت وأبعاد الشاشة</div>
+                  <div className="flex items-center gap-2 bg-stone-950 border border-stone-800 px-2.5 py-1.5 rounded-lg">
+                    <Volume2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={isMuted ? 0 : volume}
+                      onChange={e => handleVolumeChange(parseFloat(e.target.value))}
+                      className="w-full accent-emerald-500 cursor-pointer h-1.5 bg-stone-800 rounded-lg"
+                      aria-label="مستوى الصوت"
+                    />
+                    <span className="text-[11px] font-mono-num text-stone-300 w-9 text-left">
+                      {isMuted ? '0%' : `${Math.round(volume * 100)}%`}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleToggleAudioBoost}
+                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition cursor-pointer truncate ${
+                        isAudioBoosted
+                          ? 'bg-amber-500/20 border-amber-500/60 text-amber-300'
+                          : 'bg-stone-950 border-stone-800 text-stone-300'
+                      }`}
+                    >
+                      {isAudioBoosted ? '🔊 المضخم نشط (+80%)' : 'تقوية صوت المعلق'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCycleVideoFit}
+                      className="px-2.5 py-1.5 rounded-lg bg-stone-950 border border-stone-800 text-stone-300 hover:text-white text-[11px] font-bold transition cursor-pointer truncate"
+                    >
+                      الأبعاد: {videoFit === 'contain' ? 'قياسي' : videoFit === 'cover' ? 'ملء' : 'تمديد'}
                     </button>
                   </div>
                 </div>
 
-                {/* Section: All Resolution Options */}
-                <div className="space-y-1 pt-1 border-t border-stone-800">
-                  <div className="text-[11px] font-bold text-stone-300">
-                    الدقة المطلوبة:
+                {/* Group 3: Extra Stream Tools */}
+                <div className="p-3 rounded-xl bg-stone-900/80 border border-stone-800/80 space-y-2">
+                  <div className="text-[11px] font-bold text-stone-300">أدوات إضافية</div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={toggleMultiViewLayout}
+                      className="px-2.5 py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-stone-200 text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer"
+                    >
+                      <Grid className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>شاشة متعددة</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSyncLiveEdge}
+                      className="px-2.5 py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-stone-200 text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer"
+                    >
+                      <Activity className="w-3.5 h-3.5 text-rose-400" />
+                      <span>مزامنة المباشر</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCycleSleepTimer}
+                      className="px-2.5 py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-stone-300 text-[11px] flex items-center justify-center gap-1 transition cursor-pointer"
+                    >
+                      <Clock className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{sleepTimerMinutes !== null ? `${sleepTimerMinutes} د` : 'مؤقت النوم'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCopyShareLink}
+                      className="px-2.5 py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-stone-300 text-[11px] flex items-center justify-center gap-1 transition cursor-pointer"
+                    >
+                      <Share2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>{copiedLink ? 'تم النسخ!' : 'مشاركة القناة'}</span>
+                    </button>
                   </div>
-                  <div className="space-y-1">
-                    {QUALITY_OPTIONS.map(opt => {
-                      const isSelected = selectedQuality === opt.id;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => handleSelectQuality(opt.id)}
-                          className={`w-full text-right p-2 rounded-xl transition flex items-center justify-between text-xs ${
-                            isSelected
-                              ? 'bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 font-semibold'
-                              : 'hover:bg-stone-850 text-stone-300 hover:text-white'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold">{opt.label}</span>
-                            {isSelected && <Check className="w-3 h-3 text-emerald-400" />}
-                          </div>
-                          <span className="font-mono-num text-[10px] text-stone-400 bg-stone-900 px-1.5 py-0.5 rounded border border-stone-800">
-                            {opt.badge}
-                          </span>
-                        </button>
-                      );
-                    })}
+                  <div className="flex items-center justify-between gap-1.5 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => handleStepChannel(-1)}
+                      className="flex-1 py-1 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-[11px] text-stone-300 flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <ChevronRight className="w-3 h-3 text-emerald-400" />
+                      <span>القناة السابقة</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleTogglePiP}
+                      className="px-2.5 py-1 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-[11px] text-stone-300 cursor-pointer"
+                      title="صورة داخل صورة"
+                    >
+                      PiP
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStepChannel(1)}
+                      className="flex-1 py-1 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-[11px] text-stone-300 flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <span>القناة التالية</span>
+                      <ChevronLeft className="w-3 h-3 text-emerald-400" />
+                    </button>
                   </div>
-                </div>
-
-                {/* Section: Engine Switcher Advice */}
-                <div className="pt-2 border-t border-stone-800 flex items-center justify-between">
-                  <span className="text-[10px] text-stone-400">تبديل سيرفر المصدر:</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPlayerMode(prev => (prev === 'server1' ? 'server2' : prev === 'server2' ? 'server3' : 'server1'));
-                      setQualityMenuOpen(false);
-                    }}
-                    className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 underline"
-                  >
-                    انتقل إلى {playerMode === 'server1' ? 'سيرفر 2 (Cast)' : playerMode === 'server2' ? 'سيرفر 3 (Wide)' : 'سيرفر 1 (الرئيسي)'}
-                  </button>
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* Engine Switcher */}
-          <button
-            type="button"
-            onClick={() => setPlayerMode(prev => (prev === 'server1' ? 'server2' : prev === 'server2' ? 'server3' : 'server1'))}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-900 border border-stone-800 text-xs text-stone-300 hover:text-white transition"
-            title="تبديل سيرفر المصدر"
-          >
-            {playerMode === 'server1' ? (
-              <>
-                <Globe className="w-3.5 h-3.5 text-emerald-400" />
-                <span>سيرفر 1 (Dembed)</span>
-              </>
-            ) : playerMode === 'server2' ? (
-              <>
-                <Radio className="w-3.5 h-3.5 text-blue-400" />
-                <span>سيرفر 2 (Cast)</span>
-              </>
-            ) : (
-              <>
-                <Tv className="w-3.5 h-3.5 text-amber-400" />
-                <span>سيرفر 3 (Wide)</span>
-              </>
-            )}
-          </button>
-
-          {/* Favorite Toggle */}
-          <button
-            type="button"
-            onClick={() => toggleFavorite(currentChannel.id)}
-            className={`p-2 rounded-xl border border-stone-800 transition ${
-              isFavorite(currentChannel.id)
-                ? 'bg-amber-950/30 border-amber-800/50 text-amber-400'
-                : 'bg-stone-900 text-stone-400 hover:text-stone-200'
-            }`}
-            title="إضافة للمفضلة"
-            aria-label="المفضلة"
-          >
-            <Star className={`w-4 h-4 ${isFavorite(currentChannel.id) ? 'fill-current' : ''}`} />
-          </button>
-
-          {/* Reload Stream */}
-          <button
-            type="button"
-            onClick={handleReload}
-            className="p-2 rounded-xl bg-stone-900 border border-stone-800 text-stone-400 hover:text-stone-200 transition"
-            title="إعادة تحميل البث [R]"
-            aria-label="إعادة تحميل"
-          >
-            <RotateCw className="w-4 h-4" />
-          </button>
-
-          {/* Share Stream Link */}
-          <button
-            type="button"
-            onClick={handleCopyShareLink}
-            className="p-2 rounded-xl bg-stone-900 border border-stone-800 text-stone-400 hover:text-stone-200 transition relative"
-            title="نسخ رابط الغرفة"
-            aria-label="مشاركة"
-          >
-            <Share2 className="w-4 h-4" />
-            {copiedLink && (
-              <span className="absolute -top-7 left-1/2 -translate-x-1/2 bg-emerald-500 text-stone-950 text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
-                تم النسخ!
-              </span>
-            )}
-          </button>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* Tabs: In-Room Switcher vs Today Fixtures */}
-      <div className="space-y-4 pt-2">
+      {/* 3. Tabs: In-Room Channel Switcher vs Today's Live Fixtures */}
+      <div className="space-y-4 pt-1">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-800/80 pb-3">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setActiveRoomTab('switcher')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
                 activeRoomTab === 'switcher'
-                  ? 'bg-stone-100 text-stone-950 shadow-sm'
+                  ? 'bg-emerald-500 text-stone-950 shadow-sm'
                   : 'text-stone-400 hover:text-stone-200 bg-stone-900 border border-stone-800'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>تبديل القناة ({channels.length})</span>
+              <span>القنوات ({channels.length})</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveRoomTab('schedule')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
                 activeRoomTab === 'schedule'
-                  ? 'bg-stone-100 text-stone-950 shadow-sm'
+                  ? 'bg-emerald-500 text-stone-950 shadow-sm'
                   : 'text-stone-400 hover:text-stone-200 bg-stone-900 border border-stone-800'
               }`}
             >
               <Calendar className="w-3.5 h-3.5" />
-              <span>جدول مباريات اليوم ({matches.length})</span>
+              <span>مباريات اليوم ({matches.length})</span>
             </button>
           </div>
 
           {activeRoomTab === 'switcher' && (
-            <div className="relative w-44 sm:w-60">
+            <div className="relative w-full sm:w-60">
               <Search className="w-3.5 h-3.5 text-stone-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
@@ -1146,16 +1609,11 @@ export const WatchRoomPage: React.FC = () => {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
               {paginatedSwitcherChannels.map(ch => {
                 const isActive = ch.id === currentChannel.id;
+                const inMulti = multiViewIds.includes(ch.id);
                 return (
-                  <button
+                  <div
                     key={ch.id}
-                    type="button"
-                    onClick={() => {
-                      if (!isActive) {
-                        navigate(`/watchroom/${ch.id}`);
-                      }
-                    }}
-                    className={`p-2.5 rounded-xl text-right transition border flex flex-col justify-between h-20 ${
+                    className={`p-2.5 rounded-xl text-right transition border flex flex-col justify-between h-24 ${
                       isActive
                         ? 'bg-emerald-500/10 border-emerald-500/60 text-emerald-400 font-bold'
                         : 'bg-stone-900/80 hover:bg-stone-850 border-stone-800/80 text-stone-300 hover:text-white'
@@ -1163,17 +1621,48 @@ export const WatchRoomPage: React.FC = () => {
                   >
                     <div className="flex items-center justify-between w-full">
                       <span className="font-mono-num text-[10px] opacity-70">#{ch.id}</span>
-                      {isActive && (
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      )}
+                      <button
+                        type="button"
+                        onClick={e => {
+                          e.stopPropagation();
+                          setMultiViewIds(prev => {
+                            if (prev.includes(ch.id)) return prev.filter(id => id !== ch.id);
+                            const next = prev.length >= 4 ? [...prev.slice(1), ch.id] : [...prev, ch.id];
+                            return next;
+                          });
+                          if (!isMultiViewMode) {
+                            setIsMultiViewMode(true);
+                          }
+                        }}
+                        className={`text-[9px] px-1.5 py-0.5 rounded border transition cursor-pointer ${
+                          inMulti
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                            : 'bg-stone-950 border-stone-800 text-stone-400 hover:text-white'
+                        }`}
+                        title="إضافة للشاشة المتعددة"
+                      >
+                        {inMulti ? 'في المتعددة ✓' : '+ متعددة'}
+                      </button>
                     </div>
-                    <div className="text-xs truncate font-medium">
-                      {ch.arabicName || ch.name}
-                    </div>
-                    <div className="text-[10px] opacity-50 font-mono-num">
-                      {ch.quality || '1080p'}
-                    </div>
-                  </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isActive) {
+                          navigate(`/watchroom/${ch.id}`);
+                        }
+                      }}
+                      className="text-right w-full cursor-pointer"
+                    >
+                      <div className="text-xs truncate font-medium">
+                        {ch.arabicName || ch.name}
+                      </div>
+                      <div className="text-[10px] opacity-50 font-mono-num flex items-center justify-between mt-0.5">
+                        <span>{ch.quality || '1080p'}</span>
+                        <Play className="w-2.5 h-2.5 text-emerald-400 fill-current" />
+                      </div>
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -1217,8 +1706,8 @@ export const WatchRoomPage: React.FC = () => {
                           <span>·</span>
                           <span className="font-mono-num">{m.time}</span>
                           {m.status === 'LIVE' && (
-                            <span className="text-[10px] text-rose-400 bg-rose-950/60 border border-rose-800/40 px-1 rounded">
-                              مباشر الآن
+                            <span className="text-[10px] text-rose-400 font-bold">
+                              · مباشر الآن
                             </span>
                           )}
                         </div>
@@ -1241,7 +1730,7 @@ export const WatchRoomPage: React.FC = () => {
                                     navigate(`/watchroom/${ch.channel_id}`);
                                   }
                                 }}
-                                className={`px-2.5 py-1 rounded-lg font-bold text-[11px] shrink-0 transition ${
+                                className={`px-2.5 py-1 rounded-lg font-bold text-[11px] shrink-0 transition cursor-pointer ${
                                   isThisChannel
                                     ? 'bg-emerald-500 text-stone-950'
                                     : 'bg-stone-800 hover:bg-stone-700 text-stone-200'
@@ -1260,21 +1749,6 @@ export const WatchRoomPage: React.FC = () => {
             )}
           </div>
         )}
-      </div>
-
-      {/* Keyboard Shortcuts Helper Bar */}
-      <div className="p-3 bg-[#0d0e11] border border-stone-800/60 rounded-xl text-stone-500 text-[11px] flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <Keyboard className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-          <span>اختصارات لوحة المفاتيح:</span>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <span><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-800 rounded text-stone-300">T</kbd> وضع المسرح</span>
-          <span><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-800 rounded text-stone-300">F</kbd> ملء الشاشة</span>
-          <span><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-800 rounded text-stone-300">R</kbd> إعادة التحميل</span>
-          <span><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-800 rounded text-stone-300">M</kbd> كتم الصوت</span>
-          <span><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-800 rounded text-stone-300">Esc</kbd> إغلاق القوائم</span>
-        </div>
       </div>
     </div>
   );
