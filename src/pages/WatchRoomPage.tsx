@@ -36,11 +36,10 @@ import {
   X,
   Play
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp, getApiUrl } from '../context/AppContext';
 import { Channel, QualityResolution } from '../types';
 import { Pagination } from '../components/Pagination';
 import { usePageSeo } from '../hooks/usePageSeo';
-import { getApiUrl } from '../utils/api';
 
 interface QualityOptionItem {
   id: QualityResolution;
