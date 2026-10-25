@@ -185,127 +185,408 @@ export const STATIC_CHANNELS: Channel[] = [
   { id: 351, name: 'ESPN 2 USA HD', arabicName: 'إي إس بي إن 2 الأمريكية HD', category: 'other', subcat: 'us_sports', quality: '1080p FHD', lang: 'English', country: 'US' }
 ];
 
-export const STATIC_MATCHES: LiveMatch[] = [
-  {
-    id: 'static_match_1',
-    competition: 'الدوري الإنجليزي الممتاز',
-    teamA: { name: 'ليفربول', logo: 'https://media.api-sports.io/football/teams/40.png' },
-    teamB: { name: 'مانشستر سيتي', logo: 'https://media.api-sports.io/football/teams/50.png' },
-    scoreA: 2,
-    scoreB: 1,
-    status: 'LIVE',
-    statusText: 'الشوط الثاني',
-    minute: "74'",
-    time: '18:30 بتوقيت مكة',
-    localTime: '18:30 بتوقيت مكة',
-    channels: [
-      { channel_id: 91, channel_name: 'beIN Sports 1 HD', quality: '1080p FHD', isBeinArabic: true },
-      { channel_id: 61, channel_name: 'beIN Sports MENA English 1', quality: '1080p FHD', isBeinArabic: false },
-      { channel_id: 202, channel_name: 'Sky Sports Premier League UK', quality: '1080p FHD', isBeinArabic: false }
-    ],
-    commentator: 'حفيظ دراجي',
-    isBeinArabic: true,
-    broadcasterLabel: 'beIN Sports 1 HD',
-    network: 'bein_ar'
-  },
-  {
-    id: 'static_match_2',
-    competition: 'الدوري الإسباني (لا ليغا)',
-    teamA: { name: 'ريال مدريد', logo: 'https://media.api-sports.io/football/teams/541.png' },
-    teamB: { name: 'برشلونة', logo: 'https://media.api-sports.io/football/teams/529.png' },
-    scoreA: null,
-    scoreB: null,
-    status: 'FIXTURE',
-    statusText: 'لم تبدأ بعد',
-    minute: null,
-    time: '21:00 بتوقيت مكة',
-    localTime: '21:00 بتوقيت مكة',
-    channels: [
-      { channel_id: 91, channel_name: 'beIN Sports 1 HD', quality: '1080p FHD', isBeinArabic: true },
-      { channel_id: 92, channel_name: 'beIN Sports 2 HD', quality: '1080p FHD', isBeinArabic: true },
-      { channel_id: 320, channel_name: 'Movistar LaLiga Spain', quality: '1080p FHD', isBeinArabic: false }
-    ],
-    commentator: 'عصام الشوالي',
-    isBeinArabic: true,
-    broadcasterLabel: 'beIN Sports 1 HD / beIN Sports 2 HD',
-    network: 'bein_ar'
-  },
-  {
-    id: 'static_match_3',
-    competition: 'دوري أبطال أوروبا',
-    teamA: { name: 'بايرن ميونخ', logo: 'https://media.api-sports.io/football/teams/157.png' },
-    teamB: { name: 'باريس سان جيرمان', logo: 'https://media.api-sports.io/football/teams/85.png' },
-    scoreA: 1,
-    scoreB: 0,
-    status: 'LIVE',
-    statusText: 'الشوط الأول',
-    minute: "38'",
-    time: '22:00 بتوقيت مكة',
-    localTime: '22:00 بتوقيت مكة',
-    channels: [
-      { channel_id: 93, channel_name: 'beIN Sports 3 HD', quality: '1080p FHD', isBeinArabic: true },
-      { channel_id: 116, channel_name: 'beIN SPORTS 1 France', quality: '1080p FHD', isBeinArabic: false },
-      { channel_id: 181, channel_name: 'TNT Sports 1 UK', quality: '1080p FHD', isBeinArabic: false }
-    ],
-    commentator: 'خليل البلوشي',
-    isBeinArabic: true,
-    broadcasterLabel: 'beIN Sports 3 HD',
-    network: 'bein_ar'
-  },
-  {
-    id: 'static_match_4',
-    competition: 'الدوري الإيطالي (سيريا آ)',
-    teamA: { name: 'إنتر ميلان', logo: 'https://media.api-sports.io/football/teams/505.png' },
-    teamB: { name: 'يوفنتوس', logo: 'https://media.api-sports.io/football/teams/496.png' },
-    scoreA: null,
-    scoreB: null,
-    status: 'FIXTURE',
-    statusText: 'لم تبدأ بعد',
-    minute: null,
-    time: '21:45 بتوقيت مكة',
-    localTime: '21:45 بتوقيت مكة',
-    channels: [
-      { channel_id: 94, channel_name: 'beIN Sports 4 HD', quality: '1080p FHD', isBeinArabic: true },
-      { channel_id: 878, channel_name: 'EuroSport 1 Italy', quality: '1080p FHD', isBeinArabic: false }
-    ],
-    commentator: 'عامر عبد الله',
-    isBeinArabic: true,
-    broadcasterLabel: 'beIN Sports 4 HD',
-    network: 'bein_ar'
-  },
-  {
-    id: 'static_match_5',
-    competition: 'الدوري الإنجليزي الممتاز',
-    teamA: { name: 'أرسنال', logo: 'https://media.api-sports.io/football/teams/42.png' },
-    teamB: { name: 'تشيلسي', logo: 'https://media.api-sports.io/football/teams/49.png' },
-    scoreA: null,
-    scoreB: null,
-    status: 'FIXTURE',
-    statusText: 'لم تبدأ بعد',
-    minute: null,
-    time: '19:30 بتوقيت مكة',
-    localTime: '19:30 بتوقيت مكة',
-    channels: [
-      { channel_id: 91, channel_name: 'beIN Sports 1 HD', quality: '1080p FHD', isBeinArabic: true },
-      { channel_id: 61, channel_name: 'beIN Sports MENA English 1', quality: '1080p FHD', isBeinArabic: false }
-    ],
-    commentator: 'علي محمد علي',
-    isBeinArabic: true,
-    broadcasterLabel: 'beIN Sports 1 HD',
-    network: 'bein_ar'
+// Helper to fetch external HTML from browser when deployed on static-only hosting (e.g. Cloudflare static assets)
+async function fetchHtmlViaCorsProxy(targetUrl: string): Promise<string | null> {
+  const proxies = [
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
+    `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`
+  ];
+
+  for (const proxyUrl of proxies) {
+    try {
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(7000) });
+      if (res.ok) {
+        const text = await res.text();
+        if (text && text.length > 200) {
+          return text;
+        }
+      }
+    } catch {
+      // try next proxy
+    }
   }
+  return null;
+}
+
+function isExcludedChannelName(rawName: string): boolean {
+  return /ssc|alkass|al kass|abu dhabi|ad sport|dubai|israel|5plus|sport\s*[1-5]\s*il|yes\s*sport|one\s*il/i.test(rawName);
+}
+
+function categorizeChannelClient(name: string): { category: 'ar' | 'bein' | 'euro' | 'other'; subcat: string; lang: string } {
+  const lower = name.toLowerCase();
+  if (lower.includes('bein')) {
+    if (lower.includes('arabic') || /bein\s*sports?\s*(mena\s*)?[1-9]\b/i.test(lower)) {
+      if (lower.includes('english')) return { category: 'bein', subcat: 'bein_mena', lang: 'English' };
+      if (!lower.includes('france') && !lower.includes('turkey') && !lower.includes('australia') && !lower.includes('malaysia')) {
+        return { category: 'ar', subcat: 'bein_ar', lang: 'عربي' };
+      }
+    }
+    if (lower.includes('france') || lower.includes('max')) return { category: 'bein', subcat: 'bein_fr', lang: 'French' };
+    if (lower.includes('turkey')) return { category: 'bein', subcat: 'bein_tr', lang: 'Turkish' };
+    if (lower.includes('australia')) return { category: 'bein', subcat: 'bein_au', lang: 'English' };
+    if (lower.includes('usa') || lower.includes('xtra')) return { category: 'bein', subcat: 'bein_us', lang: 'English' };
+    if (lower.includes('español')) return { category: 'bein', subcat: 'bein_es', lang: 'Spanish' };
+    return { category: 'bein', subcat: 'bein_global', lang: 'Multilingual' };
+  }
+  if (/euro|arena|astro|sky sport|tnt sport|dazn|espn|canal\+|paramount|supersport|super sport|premier sport|sport tv|eleven sport|ziggo|viaplay|movistar|laliga|ligue1/i.test(lower)) {
+    return { category: 'euro', subcat: 'euro_sports', lang: 'European' };
+  }
+  return { category: 'other', subcat: 'global', lang: 'International' };
+}
+
+function decodeHtmlEntitiesClient(str: string): string {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&#039;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/[\u{1F1E6}-\u{1F1FF}\u{26BD}\u{1F3C6}]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const TEAM_TRANSLATION_KEYWORDS_CLIENT: Array<[RegExp, RegExp]> = [
+  [/ليفربول/i, /liverpool/i],
+  [/برايتون/i, /brighton/i],
+  [/مانشستر يونايتد/i, /manchester united/i],
+  [/مانشستر سيتي/i, /manchester city/i],
+  [/بورنموث/i, /bournemouth/i],
+  [/برينتفورد/i, /brentford/i],
+  [/كريستال بالاس/i, /crystal palace/i],
+  [/نيوكاسل/i, /newcastle/i],
+  [/سندرلاند/i, /sunderland/i],
+  [/ليدز/i, /leeds/i],
+  [/أرسنال|آرسنال/i, /arsenal/i],
+  [/تشيلسي/i, /chelsea/i],
+  [/توتنهام/i, /tottenham/i],
+  [/أستون فيلا/i, /aston villa/i],
+  [/برشلونة/i, /barcelona/i],
+  [/ريال مدريد/i, /real madrid/i],
+  [/أتلتيكو مدريد/i, /atletico madrid|atlético/i],
+  [/بلباو/i, /athletic club|bilbao/i],
+  [/خيتافي/i, /getafe/i],
+  [/سيلتا فيجو/i, /celta/i],
+  [/ريال بيتيس/i, /betis/i],
+  [/ريال سوسيداد/i, /real sociedad/i],
+  [/إشبيلية/i, /sevilla/i],
+  [/فالنسيا/i, /valencia/i],
+  [/فياريال/i, /villarreal/i],
+  [/بايرن ميونخ|بايرن ميونيخ/i, /bayern/i],
+  [/ليفركوزن/i, /leverkusen/i],
+  [/دورتموند/i, /dortmund/i],
+  [/لايبزيج|لايبزيغ/i, /leipzig/i],
+  [/فرانكفورت/i, /frankfurt/i],
+  [/شتوتجارت/i, /stuttgart/i],
+  [/يوفنتوس/i, /juventus/i],
+  [/إنتر ميلان|انتر ميلان/i, /internazionale|inter\b/i],
+  [/فيورنتينا/i, /fiorentina/i],
+  [/ميلان/i, /\bmilan\b/i],
+  [/أتالانتا/i, /atalanta/i],
+  [/نابولي/i, /napoli/i],
+  [/روما/i, /\broma\b/i],
+  [/لاتسيو/i, /lazio/i],
+  [/باريس سان جيرمان/i, /psg|paris saint/i],
+  [/ليون/i, /lyon/i],
+  [/مارسيليا/i, /marseille/i],
+  [/موناكو/i, /monaco/i],
+  [/ليل/i, /\blille\b/i],
+  [/سبورتنج لشبونة|سبورتينج لشبونة/i, /sporting cp/i],
+  [/بنفيكا/i, /benfica/i],
+  [/بورتو/i, /porto/i]
 ];
 
-export const STATIC_EPG: Record<number, BroadcastInfo> = {
-  91: { channelId: 91, programTitle: 'الدوري الإنجليزي الممتاز: ليفربول ضد مانشستر سيتي', category: 'كرة قدم', tournament: 'الدوري الإنجليزي الممتاز', isLive: true, isMatch: true, startTime: '18:30 بتوقيت مكة', commentator: 'حفيظ دراجي' },
-  92: { channelId: 92, programTitle: 'الدوري الإسباني (لا ليغا): ريال مدريد ضد برشلونة (الكلاسيكو)', category: 'كرة قدم', tournament: 'الدوري الإسباني', isLive: false, isMatch: true, startTime: '21:00 بتوقيت مكة', commentator: 'عصام الشوالي' },
-  93: { channelId: 93, programTitle: 'دوري أبطال أوروبا: بايرن ميونخ ضد باريس سان جيرمان', category: 'كرة قدم', tournament: 'دوري أبطال أوروبا', isLive: true, isMatch: true, startTime: '22:00 بتوقيت مكة', commentator: 'خليل البلوشي' },
-  94: { channelId: 94, programTitle: 'الدوري الإيطالي: إنتر ميلان ضد يوفنتوس', category: 'كرة قدم', tournament: 'الدوري الإيطالي', isLive: false, isMatch: true, startTime: '21:45 بتوقيت مكة', commentator: 'عامر عبد الله' },
-  578: { channelId: 578, programTitle: 'الحصاد الرياضي – أخبار الملاعب وتحليلات الجولة', category: 'أخبار ورياضة', tournament: 'نشرة أخبار beIN', isLive: true, isMatch: false, startTime: 'مستمر 24/7' }
-};
+const COMPETITION_AR_MAP_CLIENT: Array<[RegExp, string]> = [
+  [/england\s*-\s*premier league/i, 'الدوري الإنجليزي الممتاز'],
+  [/spain\s*-\s*la\s*liga/i, 'الدوري الإسباني (لا ليغا)'],
+  [/italy\s*-\s*serie a/i, 'الدوري الإيطالي (سيريا آ)'],
+  [/germany\s*-\s*bundesliga/i, 'الدوري الألماني (البوندسليغا)'],
+  [/france\s*-\s*ligue 1/i, 'الدوري الفرنسي (ليغ 1)'],
+  [/portugal\s*-\s*primeira liga/i, 'الدوري البرتغالي الممتاز'],
+  [/uefa champions league/i, 'دوري أبطال أوروبا'],
+  [/uefa europa league/i, 'الدوري الأوروبي'],
+  [/turkey\s*-\s*super lig/i, 'الدوري التركي الممتاز'],
+  [/netherlands\s*-\s*eredivisie/i, 'الدوري الهولندي']
+];
 
-const CHANNELS_CACHE_KEY = 'kolstream_cached_channels_v2';
-const MATCHES_CACHE_KEY = 'kolstream_cached_matches_v2';
+function translateCompetitionClient(comp: string): string {
+  for (const [rx, ar] of COMPETITION_AR_MAP_CLIENT) {
+    if (rx.test(comp)) return ar;
+  }
+  return comp;
+}
+
+interface ClientDliveEvent {
+  id: string;
+  gmtTime: string;
+  meccaTime: string;
+  gmtMinutes: number;
+  competition: string;
+  teamA: string;
+  teamB: string;
+  status: 'LIVE' | 'FIXTURE' | 'RESULT';
+  statusText: string;
+  minute: string | null;
+  channels: Array<{ channel_id: number; channel_name: string; quality: string; isBeinArabic: boolean }>;
+}
+
+async function scrapeDliveCatalogClient(): Promise<{ events: ClientDliveEvent[]; discoveredChannels: Channel[] }> {
+  const events: ClientDliveEvent[] = [];
+  const channelMap = new Map<number, Channel>();
+  const html = await fetchHtmlViaCorsProxy('https://dlive.sx/index.php?cat=All+Soccer+Events+%E2%9A%BD');
+  if (!html) return { events, discoveredChannels: [] };
+
+  const blocks = html.split(/<div class="schedule__event">/);
+  const now = new Date();
+  const nowUtcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+
+  for (let i = 1; i < blocks.length; i++) {
+    const block = blocks[i];
+    const rawTime = block.match(/class="schedule__time"[^>]*>(.*?)<\/span>/)?.[1]?.trim() || '00:00';
+    const rawTitle = block.match(/class="schedule__eventTitle"[^>]*>([\s\S]*?)<\/span>/)?.[1] || '';
+    const cleanTitle = decodeHtmlEntitiesClient(rawTitle.replace(/<[^>]+>/g, ''));
+    if (!cleanTitle || !cleanTitle.toLowerCase().includes(' vs ')) continue;
+    if (/israel|maccabi|hapoel|beitar|bnei sakhnin/i.test(cleanTitle)) continue;
+
+    let competition = 'مباريات كرة القدم العالمية';
+    let teamsPart = cleanTitle;
+    const colonIdx = cleanTitle.indexOf(':');
+    if (colonIdx !== -1) {
+      competition = cleanTitle.slice(0, colonIdx).trim();
+      teamsPart = cleanTitle.slice(colonIdx + 1).trim();
+    }
+
+    const vsParts = teamsPart.split(/\s+vs\s+/i);
+    if (vsParts.length < 2) continue;
+    const teamA = vsParts[0].trim();
+    const teamB = vsParts.slice(1).join(' vs ').trim();
+
+    const [hhStr, mmStr] = rawTime.split(':');
+    const gmtH = parseInt(hhStr || '0', 10);
+    const gmtM = parseInt(mmStr || '0', 10);
+    const gmtMinutes = gmtH * 60 + gmtM;
+    const meccaH = (gmtH + 3) % 24;
+    const meccaTime = `${String(meccaH).padStart(2, '0')}:${String(gmtM).padStart(2, '0')}`;
+
+    let diff = nowUtcMinutes - gmtMinutes;
+    if (diff < -720) diff += 1440;
+    let status: 'LIVE' | 'FIXTURE' | 'RESULT' = 'FIXTURE';
+    let statusText = 'لم تبدأ بعد';
+    let minute: string | null = null;
+
+    if (diff >= 0 && diff <= 115) {
+      status = 'LIVE';
+      if (diff <= 45) {
+        statusText = 'الشوط الأول';
+        minute = `${Math.max(1, diff)}'`;
+      } else if (diff <= 60) {
+        statusText = 'استراحة ما بين الشوطين';
+        minute = 'HT';
+      } else {
+        const secHalfMin = Math.min(90, 45 + (diff - 60));
+        statusText = 'الشوط الثاني';
+        minute = `${secHalfMin}'`;
+      }
+    } else if (diff > 115 && diff < 600) {
+      status = 'RESULT';
+      statusText = 'انتهت';
+    }
+
+    const chLinks = [...block.matchAll(/href=["']\/watch\.php\?id=(\d+)["'][^>]*>([\s\S]*?)<\/a>/g)];
+    const eventChannels: Array<{ channel_id: number; channel_name: string; quality: string; isBeinArabic: boolean }> = [];
+    const seenInEvent = new Set<number>();
+
+    for (const m of chLinks) {
+      const chId = parseInt(m[1], 10);
+      const chName = decodeHtmlEntitiesClient(m[2].replace(/<[^>]+>/g, ''));
+      if (!chId || !chName || seenInEvent.has(chId) || isExcludedChannelName(chName)) continue;
+      seenInEvent.add(chId);
+
+      const isBeinAr = (chId >= 91 && chId <= 99) || chId === 578 || /bein\s*sports\s*mena\s*[1-9]\b/i.test(chName);
+      const displayName = isBeinAr && chId >= 91 && chId <= 99 ? `beIN Sports ${chId - 90} HD` : chName;
+
+      eventChannels.push({
+        channel_id: chId,
+        channel_name: displayName,
+        quality: '1080p FHD',
+        isBeinArabic: isBeinAr
+      });
+
+      const existing = channelMap.get(chId);
+      const isGenericEventStream = /event\s*(sd\s*)?stream/i.test(chName);
+      if (!existing || (/event\s*(sd\s*)?stream/i.test(existing.name) && !isGenericEventStream)) {
+        const { category, subcat, lang } = categorizeChannelClient(chName);
+        const finalName = isGenericEventStream ? `${chName} #${chId} (${teamA} vs ${teamB})` : chName;
+        channelMap.set(chId, {
+          id: chId,
+          name: finalName,
+          category,
+          subcat,
+          quality: '1080p FHD',
+          lang,
+          country: 'Global',
+          description: `${competition}: ${teamA} vs ${teamB} (${meccaTime} بتوقيت مكة)`
+        });
+      }
+    }
+
+    events.push({
+      id: `dlive_ev_${i}_${gmtMinutes}`,
+      gmtTime: rawTime,
+      meccaTime,
+      gmtMinutes,
+      competition,
+      teamA,
+      teamB,
+      status,
+      statusText,
+      minute,
+      channels: eventChannels
+    });
+  }
+
+  return { events, discoveredChannels: Array.from(channelMap.values()) };
+}
+
+async function scrapeRealMatchesClientSide(): Promise<{ matches: LiveMatch[]; discoveredChannels: Channel[] }> {
+  const [ykHtml, dliveCatalog] = await Promise.all([
+    fetchHtmlViaCorsProxy('https://www.yallakora.com/matches-center'),
+    scrapeDliveCatalogClient()
+  ]);
+
+  const dliveEvents = dliveCatalog.events;
+  const matchedDliveIds = new Set<string>();
+  const liveList: LiveMatch[] = [];
+  let matchIdx = 0;
+
+  if (ykHtml) {
+    const cards = ykHtml.split(/<div[^>]*class="[^"]*matchCard[^"]*"[^>]*>/);
+    for (let i = 1; i < cards.length; i++) {
+      const card = cards[i];
+      const tournMatch = card.match(/class="tourTitle"[^>]*>(.*?)<\/a>/s);
+      let tournament = tournMatch ? tournMatch[1].replace(/<[^>]+>/g, '').trim() : 'مباراة رسمية';
+      if (/طائرة|يد|سلة|قسم ثاني|القسم الثاني|درجة ثانية|هواة/i.test(tournament)) continue;
+
+      const items = card.split(/<div class="allData">/);
+      for (let j = 1; j < items.length; j++) {
+        const item = items[j];
+        const teamA = item.match(/class="teams teamA".*?<p>(.*?)<\/p>/s)?.[1]?.trim();
+        const teamB = item.match(/class="teams teamB".*?<p>(.*?)<\/p>/s)?.[1]?.trim();
+        if (!teamA || !teamB) continue;
+        if (/إسرائيل|الكيان|مكابي|هابويل|هبوعيل|تل أبيب|بئر سبع|بيتار|سخنين|maccabi|hapoel/i.test(`${teamA} ${teamB}`)) continue;
+
+        const rawChannel = item.match(/<div class="channel[^"]*">(.*?)<\/div>/)?.[1]?.replace(/<[^>]+>/g, '').trim() || '';
+        const mergedChannels: Array<{ channel_id: number; channel_name: string; quality: string; isBeinArabic: boolean }> = [];
+        const beinNumMatch = rawChannel.match(/(?:bein\s*sports?|ب[يى]\s*إن\s*سبورت|ب[يى]\s*ان\s*سبورت)\s*(\d+)/i) || rawChannel.match(/(\d+)\s*(?:ب[يى]\s*إن\s*سبورت|ب[يى]\s*ان\s*سبورت)/i);
+        if (beinNumMatch) {
+          const num = parseInt(beinNumMatch[1], 10);
+          const chId = 90 + num;
+          if (chId >= 91 && chId <= 99) {
+            mergedChannels.push({ channel_id: chId, channel_name: `beIN Sports ${num} HD`, quality: '1080p FHD', isBeinArabic: true });
+          }
+        }
+
+        const timeStr = item.match(/class="time">(.*?)<\/span>/)?.[1]?.trim() || '21:00';
+        const rawStatus = item.match(/class="matchStatus[^"]*".*?<span>(.*?)<\/span>/s)?.[1]?.replace(/<[^>]+>/g, '').trim() || 'لم تبدأ';
+        let status: 'LIVE' | 'FIXTURE' | 'RESULT' = 'FIXTURE';
+        if (/مباشر|شوط|استراحة|الان|الآن/i.test(rawStatus)) status = 'LIVE';
+        else if (/انتهت/i.test(rawStatus)) status = 'RESULT';
+
+        const scores = [...item.matchAll(/<span class="score">([0-9]+)<\/span>/g)].map(m => parseInt(m[1], 10));
+        const scoreA = scores.length > 0 ? scores[0] : null;
+        const scoreB = scores.length > 1 ? scores[1] : null;
+
+        const logoA = item.match(/class="teams teamA".*?<img[^>]*src="([^"]+)"/s)?.[1]?.replace(/\\/g, '/');
+        const logoB = item.match(/class="teams teamB".*?<img[^>]*src="([^"]+)"/s)?.[1]?.replace(/\\/g, '/');
+
+        // Match Arabic teams to DaddyLive events
+        const arCombined = `${teamA} ${teamB}`;
+        for (const ev of dliveEvents) {
+          const enCombined = `${ev.teamA} ${ev.teamB}`;
+          let matched = false;
+          for (const [arRx, enRx] of TEAM_TRANSLATION_KEYWORDS_CLIENT) {
+            if (arRx.test(arCombined) && enRx.test(enCombined)) {
+              matched = true;
+              break;
+            }
+          }
+          if (matched) {
+            matchedDliveIds.add(ev.id);
+            const seenIds = new Set(mergedChannels.map(c => c.channel_id));
+            for (const dch of ev.channels) {
+              if (!seenIds.has(dch.channel_id)) {
+                mergedChannels.push(dch);
+                seenIds.add(dch.channel_id);
+              }
+            }
+            break;
+          }
+        }
+
+        const hasBeinAr = mergedChannels.some(c => c.isBeinArabic);
+        const broadcasterLabel = mergedChannels.length > 0
+          ? mergedChannels.slice(0, 3).map(c => c.channel_name).join(' / ')
+          : rawChannel || 'غير منقولة تلفزيونياً';
+
+        matchIdx++;
+        liveList.push({
+          id: `yk_${matchIdx}`,
+          competition: tournament,
+          teamA: { name: teamA, logo: logoA },
+          teamB: { name: teamB, logo: logoB },
+          scoreA,
+          scoreB,
+          status,
+          statusText: rawStatus,
+          minute: status === 'LIVE' ? (rawStatus || 'مباشر') : null,
+          time: `${timeStr} بتوقيت مكة`,
+          localTime: `${timeStr} بتوقيت مكة`,
+          channels: mergedChannels.slice(0, 6),
+          isBeinArabic: hasBeinAr,
+          broadcasterLabel,
+          network: hasBeinAr ? 'bein_ar' : mergedChannels.length > 0 ? 'other' : 'unbroadcast'
+        });
+      }
+    }
+  }
+
+  for (const ev of dliveEvents) {
+    if (matchedDliveIds.has(ev.id) || ev.channels.length === 0) continue;
+    const hasBeinAr = ev.channels.some(c => c.isBeinArabic);
+    liveList.push({
+      id: ev.id,
+      competition: translateCompetitionClient(ev.competition),
+      teamA: { name: ev.teamA },
+      teamB: { name: ev.teamB },
+      scoreA: null,
+      scoreB: null,
+      status: ev.status,
+      statusText: ev.statusText,
+      minute: ev.minute,
+      time: `${ev.meccaTime} بتوقيت مكة`,
+      localTime: `${ev.meccaTime} بتوقيت مكة`,
+      channels: ev.channels.slice(0, 6),
+      isBeinArabic: hasBeinAr,
+      broadcasterLabel: ev.channels.slice(0, 3).map(c => c.channel_name).join(' / '),
+      network: hasBeinAr ? 'bein_ar' : 'other'
+    });
+  }
+
+  liveList.sort((a, b) => {
+    const order: Record<string, number> = { LIVE: 0, FIXTURE: 1, RESULT: 2 };
+    const diff = (order[a.status] ?? 3) - (order[b.status] ?? 3);
+    if (diff !== 0) return diff;
+    const aScore = a.isBeinArabic ? 2 : a.channels.length > 0 ? 1 : 0;
+    const bScore = b.isBeinArabic ? 2 : b.channels.length > 0 ? 1 : 0;
+    return bScore - aScore;
+  });
+
+  return { matches: liveList, discoveredChannels: dliveCatalog.discoveredChannels };
+}
+
+const CHANNELS_CACHE_KEY = 'kolstream_cached_channels_v3';
+const MATCHES_CACHE_KEY = 'kolstream_cached_matches_v3';
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<ThemeId>(() => {
@@ -333,7 +614,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  // Initialize channels with cached data or bundled static catalog (NEVER 0 channels)
+  // Initialize channels with cached data or verified base channels
   const [channels, setChannels] = useState<Channel[]>(() => {
     try {
       const cached = localStorage.getItem(CHANNELS_CACHE_KEY);
@@ -348,10 +629,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     return STATIC_CHANNELS;
   });
-  const [loadingChannels, setLoadingChannels] = useState<boolean>(false);
+  const [loadingChannels, setLoadingChannels] = useState<boolean>(true);
   const [channelsError, setChannelsError] = useState<string | null>(null);
 
-  // Initialize matches with cached data or static fallback
+  // Initialize matches empty (NO fake hardcoded matches!) and load real matches from API or live scraper
   const [matches, setMatches] = useState<LiveMatch[]>(() => {
     try {
       const cached = localStorage.getItem(MATCHES_CACHE_KEY);
@@ -364,14 +645,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } catch {
       // ignore
     }
-    return STATIC_MATCHES;
+    return [];
   });
-  const [loadingMatches, setLoadingMatches] = useState<boolean>(false);
+  const [loadingMatches, setLoadingMatches] = useState<boolean>(true);
   const [matchesError, setMatchesError] = useState<string | null>(null);
-  const [lastMatchesUpdated, setLastMatchesUpdated] = useState<Date | null>(() => new Date());
+  const [lastMatchesUpdated, setLastMatchesUpdated] = useState<Date | null>(null);
 
-  const [epg, setEpg] = useState<Record<number, BroadcastInfo>>(() => STATIC_EPG);
-  const [loadingEpg, setLoadingEpg] = useState<boolean>(false);
+  const [epg, setEpg] = useState<Record<number, BroadcastInfo>>({});
+  const [loadingEpg, setLoadingEpg] = useState<boolean>(true);
 
   const [favorites, setFavorites] = useState<number[]>(() => {
     try {
@@ -497,26 +778,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
 
       const contentType = res.headers.get('content-type') || '';
-      // If 404 or static host returns HTML doctype (e.g. Cloudflare Pages SPA rewrite)
-      if (!res.ok || !contentType.includes('application/json')) {
-        setChannels(prev => (prev.length > 0 ? prev : STATIC_CHANNELS));
-        return;
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.channels) && data.channels.length > 0) {
+          setChannels(data.channels);
+          try {
+            localStorage.setItem(CHANNELS_CACHE_KEY, JSON.stringify(data.channels));
+          } catch {}
+          return;
+        }
       }
 
-      const data = await res.json();
-      if (data && data.success && Array.isArray(data.channels) && data.channels.length > 0) {
-        setChannels(data.channels);
-        try {
-          localStorage.setItem(CHANNELS_CACHE_KEY, JSON.stringify(data.channels));
-        } catch {
-          // ignore
+      // If /api/channels returned HTML (static Cloudflare host without backend), scrape live 24/7 channels directly
+      const html247 = await fetchHtmlViaCorsProxy('https://dlive.sx/24-7-channels.php');
+      if (html247) {
+        const merged: Channel[] = [...STATIC_CHANNELS];
+        const knownIds = new Set<number>(merged.map(c => c.id));
+        const regex = /href=["']\/watch\.php\?id=(\d+)["'][^>]*>([\s\S]*?)<\/a>/g;
+        let match;
+        while ((match = regex.exec(html247)) !== null) {
+          const id = parseInt(match[1], 10);
+          if (!knownIds.has(id)) {
+            const rawName = decodeHtmlEntitiesClient(match[2].replace(/<[^>]+>/g, '').replace(/ID:\s*\d+/, ''));
+            if (!rawName || isExcludedChannelName(rawName)) continue;
+            const { category, subcat, lang } = categorizeChannelClient(rawName);
+            merged.push({
+              id,
+              name: rawName,
+              category,
+              subcat,
+              quality: '1080p FHD',
+              lang,
+              country: 'Global'
+            });
+            knownIds.add(id);
+          }
         }
-      } else {
-        setChannels(prev => (prev.length > 0 ? prev : STATIC_CHANNELS));
+        setChannels(merged);
+        try {
+          localStorage.setItem(CHANNELS_CACHE_KEY, JSON.stringify(merged));
+        } catch {}
       }
     } catch {
-      // Always preserve bundled or cached channels; never reset to 0
-      setChannels(prev => (prev.length > 0 ? prev : STATIC_CHANNELS));
+      // Retain existing channels
     } finally {
       setLoadingChannels(false);
     }
@@ -531,25 +835,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
 
       const contentType = res.headers.get('content-type') || '';
-      if (!res.ok || !contentType.includes('application/json')) {
-        setMatches(prev => (prev.length > 0 ? prev : STATIC_MATCHES));
-        return;
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.matches)) {
+          setMatches(data.matches);
+          setLastMatchesUpdated(new Date());
+          try {
+            localStorage.setItem(MATCHES_CACHE_KEY, JSON.stringify(data.matches));
+          } catch {}
+          return;
+        }
       }
 
-      const data = await res.json();
-      if (data && data.success && Array.isArray(data.matches) && data.matches.length > 0) {
-        setMatches(data.matches);
+      // Static Cloudflare fallback: scrape REAL today's matches from Yallakora + DaddyLive directly
+      const { matches: scrapedMatches, discoveredChannels } = await scrapeRealMatchesClientSide();
+      if (scrapedMatches.length > 0) {
+        setMatches(scrapedMatches);
         setLastMatchesUpdated(new Date());
         try {
-          localStorage.setItem(MATCHES_CACHE_KEY, JSON.stringify(data.matches));
-        } catch {
-          // ignore
-        }
-      } else {
-        setMatches(prev => (prev.length > 0 ? prev : STATIC_MATCHES));
+          localStorage.setItem(MATCHES_CACHE_KEY, JSON.stringify(scrapedMatches));
+        } catch {}
+      }
+      if (discoveredChannels.length > 0) {
+        setChannels(prev => {
+          const knownIds = new Set(prev.map(c => c.id));
+          const updated = [...prev];
+          for (const ch of discoveredChannels) {
+            if (!knownIds.has(ch.id)) {
+              updated.push(ch);
+              knownIds.add(ch.id);
+            }
+          }
+          return updated;
+        });
       }
     } catch {
-      setMatches(prev => (prev.length > 0 ? prev : STATIC_MATCHES));
+      // ignore
     } finally {
       setLoadingMatches(false);
     }
@@ -569,7 +890,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setEpg(data.epg);
       }
     } catch {
-      // Graceful fallback to existing EPG
+      // Dynamic EPG is computed from real matches in getChannelBroadcast
     } finally {
       setLoadingEpg(false);
     }

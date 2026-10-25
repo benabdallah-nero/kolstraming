@@ -49,113 +49,105 @@ const STATIC_CHANNELS_DATA = [
   { id: 301, name: 'DAZN 1 Bar HD', arabicName: 'دازون 1 HD', category: 'euro', subcat: 'euro_sports', quality: '1080p FHD', lang: 'German', country: 'DE' }
 ];
 
-const STATIC_MATCHES_DATA = [
-  {
-    id: 'cf_match_1',
-    competition: 'الدوري الإنجليزي الممتاز',
-    teamA: { name: 'ليفربول', logo: 'https://media.api-sports.io/football/teams/40.png' },
-    teamB: { name: 'مانشستر سيتي', logo: 'https://media.api-sports.io/football/teams/50.png' },
-    scoreA: 2,
-    scoreB: 1,
-    status: 'LIVE',
-    statusText: 'الشوط الثاني',
-    minute: "74'",
-    time: '18:30 بتوقيت مكة',
-    localTime: '18:30 بتوقيت مكة',
-    channels: [
-      { channel_id: 91, channel_name: 'beIN Sports 1 HD', quality: '1080p FHD', isBeinArabic: true },
-      { channel_id: 61, channel_name: 'beIN Sports MENA English 1', quality: '1080p FHD', isBeinArabic: false }
-    ],
-    commentator: 'حفيظ دراجي',
-    isBeinArabic: true,
-    broadcasterLabel: 'beIN Sports 1 HD',
-    network: 'bein_ar'
-  },
-  {
-    id: 'cf_match_2',
-    competition: 'الدوري الإسباني (لا ليغا)',
-    teamA: { name: 'ريال مدريد', logo: 'https://media.api-sports.io/football/teams/541.png' },
-    teamB: { name: 'برشلونة', logo: 'https://media.api-sports.io/football/teams/529.png' },
-    scoreA: null,
-    scoreB: null,
-    status: 'FIXTURE',
-    statusText: 'لم تبدأ بعد',
-    minute: null,
-    time: '21:00 بتوقيت مكة',
-    localTime: '21:00 بتوقيت مكة',
-    channels: [
-      { channel_id: 91, channel_name: 'beIN Sports 1 HD', quality: '1080p FHD', isBeinArabic: true },
-      { channel_id: 92, channel_name: 'beIN Sports 2 HD', quality: '1080p FHD', isBeinArabic: true }
-    ],
-    commentator: 'عصام الشوالي',
-    isBeinArabic: true,
-    broadcasterLabel: 'beIN Sports 1 HD / beIN Sports 2 HD',
-    network: 'bein_ar'
-  },
-  {
-    id: 'cf_match_3',
-    competition: 'دوري أبطال أوروبا',
-    teamA: { name: 'بايرن ميونخ', logo: 'https://media.api-sports.io/football/teams/157.png' },
-    teamB: { name: 'باريس سان جيرمان', logo: 'https://media.api-sports.io/football/teams/85.png' },
-    scoreA: 1,
-    scoreB: 0,
-    status: 'LIVE',
-    statusText: 'الشوط الأول',
-    minute: "38'",
-    time: '22:00 بتوقيت مكة',
-    localTime: '22:00 بتوقيت مكة',
-    channels: [
-      { channel_id: 93, channel_name: 'beIN Sports 3 HD', quality: '1080p FHD', isBeinArabic: true },
-      { channel_id: 116, channel_name: 'beIN SPORTS 1 France', quality: '1080p FHD', isBeinArabic: false }
-    ],
-    commentator: 'خليل البلوشي',
-    isBeinArabic: true,
-    broadcasterLabel: 'beIN Sports 3 HD',
-    network: 'bein_ar'
+function mapBroadcasterChannel(channelText: string) {
+  const clean = channelText.toLowerCase();
+  const numMatch = clean.match(/(\d+)/);
+  const num = numMatch ? parseInt(numMatch[1], 10) : 1;
+  if (clean.includes('xtra')) {
+    return [{ channel_id: 100, channel_name: 'beIN SPORTS XTRA 1', quality: '1080p FHD', isBeinArabic: false }];
   }
-];
+  if (clean.includes('english')) {
+    return [{ channel_id: num === 2 ? 90 : 61, channel_name: `beIN Sports English ${num}`, quality: '1080p FHD', isBeinArabic: false }];
+  }
+  if (clean.includes('france') || clean.includes('fr ')) {
+    const frMap: Record<number, number> = { 1: 116, 2: 117, 3: 118 };
+    return [{ channel_id: frMap[num] || 116, channel_name: `beIN SPORTS ${num} France`, quality: '1080p FHD', isBeinArabic: false }];
+  }
+  const chNum = num >= 1 && num <= 9 ? num : 1;
+  return [
+    { channel_id: 90 + chNum, channel_name: `beIN Sports ${chNum} HD`, quality: '1080p FHD', isBeinArabic: true },
+    { channel_id: 61, channel_name: 'beIN Sports MENA English 1', quality: '1080p FHD', isBeinArabic: false }
+  ];
+}
 
-const STATIC_EPG_DATA: Record<number, any> = {
-  91: {
-    channelId: 91,
-    programTitle: 'الدوري الإنجليزي الممتاز: ليفربول ضد مانشستر سيتي',
-    category: 'كرة قدم',
-    tournament: 'الدوري الإنجليزي الممتاز',
-    isLive: true,
-    isMatch: true,
-    startTime: '18:30 بتوقيت مكة',
-    commentator: 'حفيظ دراجي'
-  },
-  92: {
-    channelId: 92,
-    programTitle: 'الدوري الإسباني: ريال مدريد ضد برشلونة (الكلاسيكو)',
-    category: 'كرة قدم',
-    tournament: 'الدوري الإسباني',
-    isLive: false,
-    isMatch: true,
-    startTime: '21:00 بتوقيت مكة',
-    commentator: 'عصام الشوالي'
-  },
-  93: {
-    channelId: 93,
-    programTitle: 'دوري أبطال أوروبا: بايرن ميونخ ضد باريس سان جيرمان',
-    category: 'كرة قدم',
-    tournament: 'دوري أبطال أوروبا',
-    isLive: true,
-    isMatch: true,
-    startTime: '22:00 بتوقيت مكة',
-    commentator: 'خليل البلوشي'
-  },
-  578: {
-    channelId: 578,
-    programTitle: 'الحصاد الرياضي – نشرة الأخبار الرياضية على مدار 24 ساعة',
-    category: 'أخبار ورياضة',
-    tournament: 'نشرة أخبار beIN',
-    isLive: true,
-    isMatch: false,
-    startTime: 'مستمر 24/7'
+async function scrapeLiveMatchesEdge(): Promise<any[]> {
+  const matches: any[] = [];
+  try {
+    const res = await fetch('https://www.yallakora.com/matches-center', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8'
+      }
+    });
+    if (res.ok) {
+      const html = await res.text();
+      const cardBlocks = html.split(/class=["'][^"']*matchCard[^"']*["']/i).slice(1);
+      let idx = 0;
+      for (const card of cardBlocks) {
+        const compMatch = card.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i);
+        const competition = compMatch ? compMatch[1].replace(/<[^>]+>/g, '').trim() : 'بطولة كروية';
+        const items = card.split(/class=["'][^"']*item\s+(?:future|now|finish|liItem)[^"']*["']/i).slice(1);
+        for (const item of items) {
+          const teamAMatch = item.match(/class=["'][^"']*teamA[^"']*["'][\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/i);
+          const teamBMatch = item.match(/class=["'][^"']*teamB[^"']*["'][\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/i);
+          if (!teamAMatch || !teamBMatch) continue;
+          const teamAName = teamAMatch[1].replace(/<[^>]+>/g, '').trim();
+          const teamBName = teamBMatch[1].replace(/<[^>]+>/g, '').trim();
+
+          const logoAMatch = item.match(/class=["'][^"']*teamA[^"']*["'][\s\S]*?<img[^>]+(?:data-src|src)=["']([^"']+)["']/i);
+          const logoBMatch = item.match(/class=["'][^"']*teamB[^"']*["'][\s\S]*?<img[^>]+(?:data-src|src)=["']([^"']+)["']/i);
+
+          const scores = [...item.matchAll(/class=["'][^"']*score[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi)].map(m =>
+            m[1].replace(/<[^>]+>/g, '').trim()
+          );
+          const parsedA = scores[0] && scores[0] !== '-' ? parseInt(scores[0], 10) : null;
+          const parsedB = scores[1] && scores[1] !== '-' ? parseInt(scores[1], 10) : null;
+
+          const timeMatch = item.match(/class=["'][^"']*time[^"']*["'][^>]*>([\s\S]*?)<\/span>/i);
+          const matchTime = timeMatch ? timeMatch[1].replace(/<[^>]+>/g, '').trim() : '20:00';
+
+          const statusMatch = item.match(/class=["'][^"']*matchStatus[^"']*["'][\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/i);
+          const statusRaw = statusMatch ? statusMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+
+          const chMatch = item.match(/class=["'][^"']*channel[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
+          const channelRaw = chMatch ? chMatch[1].replace(/<[^>]+>/g, '').trim() : 'beIN Sports 1 HD';
+
+          let status: 'LIVE' | 'FIXTURE' | 'FINISHED' = 'FIXTURE';
+          let statusText = 'لم تبدأ بعد';
+          if (/مباشر|الشوط|جارية|الان|الآن/i.test(statusRaw)) {
+            status = 'LIVE';
+            statusText = statusRaw || 'مباشر الآن';
+          } else if (/انتهت|نهاية/i.test(statusRaw)) {
+            status = 'FINISHED';
+            statusText = 'انتهت المباراة';
+          }
+
+          idx++;
+          matches.push({
+            id: `yk_edge_${idx}`,
+            competition,
+            teamA: { name: teamAName, logo: logoAMatch?.[1] || `https://ui-avatars.com/api/?name=${encodeURIComponent(teamAName)}&background=141419&color=10b981&bold=true` },
+            teamB: { name: teamBName, logo: logoBMatch?.[1] || `https://ui-avatars.com/api/?name=${encodeURIComponent(teamBName)}&background=141419&color=06b6d4&bold=true` },
+            scoreA: Number.isNaN(parsedA) ? null : parsedA,
+            scoreB: Number.isNaN(parsedB) ? null : parsedB,
+            status,
+            statusText,
+            minute: status === 'LIVE' ? 'مباشر' : null,
+            time: matchTime ? `${matchTime} بتوقيت القاهرة` : 'اليوم',
+            localTime: matchTime ? `${matchTime} بتوقيت القاهرة` : 'اليوم',
+            channels: mapBroadcasterChannel(channelRaw),
+            isBeinArabic: true,
+            broadcasterLabel: channelRaw || 'beIN Sports HD',
+            network: 'bein_ar'
+          });
+        }
+      }
+    }
+  } catch {
+    // Ignore edge fetch errors
   }
-};
+  return matches;
+}
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -173,7 +165,6 @@ export const onRequest = async (context: {
   const { request, env } = context;
   const url = new URL(request.url);
 
-  // Handle CORS preflight
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -185,7 +176,7 @@ export const onRequest = async (context: {
     });
   }
 
-  // 1. If user configured an upstream Vercel/Node backend, proxy non-static routes there
+  // 1. If user configured an upstream Vercel/Node backend, proxy routes there
   const proxyBackend = env.VERCEL_BACKEND_URL || env.API_BACKEND_URL;
   if (proxyBackend) {
     try {
@@ -208,17 +199,15 @@ export const onRequest = async (context: {
         });
       }
     } catch {
-      // Fall through to native handler if proxy backend is unreachable
+      // Fall through to native handler
     }
   }
 
   // 2. Native Cloudflare Pages Functions Handlers
   const pathname = url.pathname;
 
-  // /api/channels
   if (pathname.endsWith('/channels')) {
-    // Attempt dynamic fetch from DaddyLive 24-7 channels
-    let channels = [...STATIC_CHANNELS_DATA];
+    const channels = [...STATIC_CHANNELS_DATA];
     try {
       const dliveRes = await fetch('https://dlive.sx/24-7-channels.php', {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36', 'Referer': 'https://dlive.sx/' }
@@ -247,7 +236,7 @@ export const onRequest = async (context: {
         }
       }
     } catch {
-      // Use STATIC_CHANNELS_DATA
+      // Return base channels
     }
 
     return new Response(JSON.stringify({ success: true, count: channels.length, channels }), {
@@ -256,23 +245,39 @@ export const onRequest = async (context: {
     });
   }
 
-  // /api/live-matches
   if (pathname.endsWith('/live-matches')) {
-    return new Response(JSON.stringify({ success: true, count: STATIC_MATCHES_DATA.length, matches: STATIC_MATCHES_DATA }), {
+    const matches = await scrapeLiveMatchesEdge();
+    return new Response(JSON.stringify({ success: true, count: matches.length, matches }), {
       status: 200,
       headers: JSON_HEADERS
     });
   }
 
-  // /api/epg/live
   if (pathname.endsWith('/epg/live')) {
-    return new Response(JSON.stringify({ success: true, epg: STATIC_EPG_DATA }), {
+    const matches = await scrapeLiveMatchesEdge();
+    const epg: Record<number, any> = {};
+    for (const m of matches) {
+      for (const ch of m.channels || []) {
+        if (!epg[ch.channel_id] || m.status === 'LIVE') {
+          epg[ch.channel_id] = {
+            channelId: ch.channel_id,
+            programTitle: `${m.competition}: ${m.teamA.name} ضد ${m.teamB.name}`,
+            category: 'كرة قدم',
+            tournament: m.competition,
+            isLive: m.status === 'LIVE',
+            isMatch: true,
+            startTime: m.localTime || m.time,
+            commentator: m.commentator
+          };
+        }
+      }
+    }
+    return new Response(JSON.stringify({ success: true, epg }), {
       status: 200,
       headers: JSON_HEADERS
     });
   }
 
-  // /api/status
   if (pathname.endsWith('/status')) {
     return new Response(JSON.stringify({
       status: 'online',
@@ -284,7 +289,6 @@ export const onRequest = async (context: {
     });
   }
 
-  // Fallback for unknown /api/* endpoint
   return new Response(JSON.stringify({ error: 'Endpoint not found on Cloudflare Pages Worker' }), {
     status: 404,
     headers: JSON_HEADERS

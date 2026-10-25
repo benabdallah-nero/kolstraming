@@ -78,6 +78,13 @@
   <body class="bg-slate-950 text-slate-100">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+        });
+      }
+    </script>
   </body>
 </html>
 
