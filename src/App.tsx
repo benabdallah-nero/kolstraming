@@ -12,7 +12,6 @@ import { FavoritesPage } from './pages/FavoritesPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { TermsPage } from './pages/TermsPage';
 import { DmcaPage } from './pages/DmcaPage';
-import { MonetagAdManager } from './components/ads/MonetagAdManager';
 
 export default function App() {
   return (
@@ -61,9 +60,6 @@ export default function App() {
 
           {/* Persistent Floating Mini-Player Pill */}
           <MiniPlayerPill />
-
-          {/* Monetag Visual Ads Manager (In-Page Push & Vignette) */}
-          <MonetagAdManager />
 
           {/* Mobile Tactile Bottom Dock */}
           <BottomDock />
