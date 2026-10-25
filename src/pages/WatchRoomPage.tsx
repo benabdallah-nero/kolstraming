@@ -13,7 +13,6 @@ import {
   Layers,
   Search,
   Check,
-  ChevronLeft,
   Sliders,
   Maximize2,
   Minimize2,
@@ -21,7 +20,6 @@ import {
   VolumeX,
   Keyboard,
   Info,
-  Zap,
   ShieldCheck,
   Activity,
   Radio,
@@ -54,16 +52,60 @@ export const WatchRoomPage: React.FC = () => {
   const navigate = useNavigate();
   const { channels, loadingChannels, matches, isFavorite, toggleFavorite, setActiveStreamingChannel } = useApp();
 
-  // Find target channel by channelId or fallback to premier channel (e.g. 91)
+  // Dynamically resolved metadata for channels opened directly via URL before or outside catalog
+  const [resolvedMeta, setResolvedMeta] = useState<{ id: number; name: string; lang: string; category: Channel['category'] } | null>(null);
+
+  useEffect(() => {
+    if (!channelId) return;
+    const found = channels.find(c => String(c.id) === String(channelId));
+    if (found) return;
+
+    const numId = parseInt(channelId, 10);
+    if (isNaN(numId) || numId <= 0) return;
+
+    let cancelled = false;
+    fetch(`/api/resolve-m3u8/${numId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (!cancelled && data && data.success && data.channelName) {
+          setResolvedMeta({
+            id: numId,
+            name: data.channelName,
+            lang: data.lang || 'International',
+            category: (data.category as Channel['category']) || 'other'
+          });
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [channelId, channels]);
+
+  // Find target channel by channelId from catalog or dynamically resolved metadata
   const currentChannel = useMemo<Channel | null>(() => {
-    if (channels.length === 0) return null;
     if (channelId) {
       const found = channels.find(c => String(c.id) === String(channelId));
       if (found) return found;
+
+      const numId = parseInt(channelId, 10);
+      if (!isNaN(numId) && numId > 0) {
+        const dynamicName = resolvedMeta && resolvedMeta.id === numId ? resolvedMeta.name : `Channel #${numId}`;
+        return {
+          id: numId,
+          name: dynamicName,
+          category: resolvedMeta && resolvedMeta.id === numId ? resolvedMeta.category : 'other',
+          subcat: 'live_event',
+          quality: '1080p FHD',
+          lang: resolvedMeta && resolvedMeta.id === numId ? resolvedMeta.lang : 'International',
+          country: 'Global'
+        };
+      }
     }
-    // Default to beIN 1 (id 91) if available, or first channel
+    if (channels.length === 0) return null;
     return channels.find(c => c.id === 91) || channels[0];
-  }, [channels, channelId]);
+  }, [channels, channelId, resolvedMeta]);
 
   usePageSeo({
     title: currentChannel
@@ -75,8 +117,8 @@ export const WatchRoomPage: React.FC = () => {
     canonicalPath: currentChannel ? `/watchroom/${currentChannel.id}` : '/watchroom'
   });
 
-  // Player state
-  const [playerMode, setPlayerMode] = useState<'clean-embed' | 'native'>('clean-embed');
+  // Player state (3 distinct upstream CDNs: server1=dembed, server2=cast, server3=wide)
+  const [playerMode, setPlayerMode] = useState<'server1' | 'server2' | 'server3'>('server1');
   const [playerStatus, setPlayerStatus] = useState<'loading' | 'playing' | 'error'>('loading');
   const [retryKey, setRetryKey] = useState<number>(0);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
@@ -100,6 +142,7 @@ export const WatchRoomPage: React.FC = () => {
   // Cinema Theater Mode & Audio state
   const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [volume, setVolume] = useState<number>(1);
   const [isAudioBoosted, setIsAudioBoosted] = useState<boolean>(false);
 
   // In-room active tab: 'switcher' vs 'schedule'
@@ -114,8 +157,10 @@ export const WatchRoomPage: React.FC = () => {
   const hlsRef = useRef<Hls | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
 
-  // Listen to stream stats and stall recovery events from the iframe
+  // Listen to stream stats, mute state, and stall recovery events from the self-hosted clean-embed player
   useEffect(() => {
     const handleMsg = (e: MessageEvent) => {
       if (!e.data) return;
@@ -125,8 +170,13 @@ export const WatchRoomPage: React.FC = () => {
         setStreamSourceInfo({
           isSingleBitrate: isSingle,
           levelsCount: lvls.length,
-          currentResolution: lvls[0]?.height ? `${lvls[0].height}p` : '1080p FHD'
+          currentResolution: lvls[0]?.height ? `${lvls[0].height}p FHD` : '1080p FHD'
         });
+      } else if (e.data.type === 'KOLSTREAM_MUTE_STATE') {
+        setIsMuted(!!e.data.muted);
+        if (typeof e.data.volume === 'number') {
+          setVolume(e.data.volume);
+        }
       } else if (e.data.type === 'KOLSTREAM_STALL_RECOVERED') {
         setQualityToast('تم تخطي التقطيع واستئناف البث بنجاح 🛡️');
         setTimeout(() => setQualityToast(null), 3000);
@@ -147,7 +197,7 @@ export const WatchRoomPage: React.FC = () => {
   const currentMatch = useMemo(() => {
     if (!currentChannel) return null;
     return matches.find(m =>
-      m.channels && m.channels.some(c => c.channel_id === currentChannel.id)
+      m.channels && m.channels.some(c => Number(c.channel_id) === Number(currentChannel.id))
     );
   }, [matches, currentChannel]);
 
@@ -175,13 +225,52 @@ export const WatchRoomPage: React.FC = () => {
     setIsTheaterMode(prev => !prev);
   }, []);
 
-  const handleToggleMute = useCallback(() => {
+  const handleForceUnmute = useCallback(() => {
+    setIsMuted(false);
+    const targetVol = volume > 0.05 ? volume : 1.0;
+    setVolume(targetVol);
     if (videoRef.current) {
-      videoRef.current.muted = !videoRef.current.muted;
-      setIsMuted(videoRef.current.muted);
-    } else if (iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.postMessage({ type: 'TOGGLE_MUTE' }, '*');
-      setIsMuted(prev => !prev);
+      videoRef.current.muted = false;
+      videoRef.current.volume = targetVol;
+      if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+      videoRef.current.play().catch(() => {});
+    }
+    if (iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage({ type: 'SET_MUTE', muted: false }, '*');
+    }
+    setQualityToast('🔊 تم تشغيل صوت البث المباشر');
+    setTimeout(() => setQualityToast(null), 2500);
+  }, [volume]);
+
+  const handleToggleMute = useCallback(() => {
+    if (isMuted) {
+      handleForceUnmute();
+      return;
+    }
+    setIsMuted(true);
+    if (videoRef.current) {
+      videoRef.current.muted = true;
+    }
+    if (iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage({ type: 'SET_MUTE', muted: true }, '*');
+    }
+  }, [isMuted, handleForceUnmute]);
+
+  const handleVolumeChange = useCallback((newVol: number) => {
+    const clamped = Math.max(0, Math.min(1, newVol));
+    setVolume(clamped);
+    setIsMuted(clamped === 0);
+    if (videoRef.current) {
+      videoRef.current.volume = clamped;
+      videoRef.current.muted = clamped === 0;
+      if (clamped > 0 && audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+    }
+    if (iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage({ type: 'SET_VOLUME', volume: clamped }, '*');
     }
   }, []);
 
@@ -193,9 +282,6 @@ export const WatchRoomPage: React.FC = () => {
       } else if (videoRef.current && document.pictureInPictureEnabled) {
         await videoRef.current.requestPictureInPicture();
         setQualityToast('تم تفعيل وضع صورة داخل صورة (PiP)');
-      } else {
-        setPlayerMode('native');
-        setQualityToast('تم التحويل إلى مشغل HTML5 لتشغيل صورة داخل صورة');
       }
     } catch {
       setQualityToast('ميزة صورة داخل صورة تتطلب تشغيل الفيديو أولاً');
@@ -206,14 +292,38 @@ export const WatchRoomPage: React.FC = () => {
   const handleToggleAudioBoost = useCallback(() => {
     setIsAudioBoosted(prev => {
       const next = !prev;
+      setIsMuted(false);
+      const targetVol = volume > 0.05 ? volume : 1.0;
+      setVolume(targetVol);
       if (videoRef.current) {
-        videoRef.current.volume = next ? 1.0 : 0.8;
+        videoRef.current.muted = false;
+        videoRef.current.volume = targetVol;
+        try {
+          const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+          if (!audioCtxRef.current && AudioCtx) {
+            const ctx = new AudioCtx();
+            const source = ctx.createMediaElementSource(videoRef.current);
+            const gain = ctx.createGain();
+            source.connect(gain);
+            gain.connect(ctx.destination);
+            audioCtxRef.current = ctx;
+            gainNodeRef.current = gain;
+          }
+          if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+            audioCtxRef.current.resume();
+          }
+          if (gainNodeRef.current) {
+            gainNodeRef.current.gain.value = next ? 1.8 : 1.0;
+          }
+        } catch {
+          videoRef.current.volume = 1.0;
+        }
       }
-      setQualityToast(next ? '🔊 تم تفعيل مضخم صوت التعليق (+50%)' : 'تمت استعادة مستوى الصوت القياسي');
+      setQualityToast(next ? '🔊 تم تفعيل مضخم صوت التعليق (+80%)' : 'تمت استعادة مستوى الصوت القياسي');
       setTimeout(() => setQualityToast(null), 3000);
       return next;
     });
-  }, []);
+  }, [volume]);
 
   const handleCopyShareLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -237,7 +347,6 @@ export const WatchRoomPage: React.FC = () => {
 
     const targetHeight = quality === '1080p' ? 1080 : quality === '720p' ? 720 : quality === '480p' ? 480 : 360;
 
-    // Find level closest to target height
     let bestIndex = 0;
     let minDiff = Infinity;
     levels.forEach((lvl, idx) => {
@@ -255,16 +364,7 @@ export const WatchRoomPage: React.FC = () => {
   // Handle Quality Selection
   const handleSelectQuality = (quality: QualityResolution) => {
     setSelectedQuality(quality);
-
-    if (playerMode === 'native') {
-      applyQualityToHls(quality);
-    } else if (playerMode === 'clean-embed' && iframeRef.current?.contentWindow) {
-      const targetHeight = quality === '1080p' ? 1080 : quality === '720p' ? 720 : quality === '480p' ? 480 : 360;
-      iframeRef.current.contentWindow.postMessage({
-        type: 'SET_QUALITY_LEVEL',
-        levelIndex: quality === 'auto' ? -1 : (targetHeight <= 480 ? 0 : 1)
-      }, '*');
-    }
+    applyQualityToHls(quality);
 
     const opt = QUALITY_OPTIONS.find(q => q.id === quality);
     const msg = `تم ضبط الجودة: ${opt?.label || quality}`;
@@ -275,9 +375,9 @@ export const WatchRoomPage: React.FC = () => {
   // Toggle Buffer Anti-Lag Mode
   const handleToggleBufferMode = (mode: 'anti-lag' | 'low-latency') => {
     setBufferMode(mode);
-    if (playerMode === 'native' && hlsRef.current) {
+    if (hlsRef.current) {
       if (mode === 'anti-lag') {
-        hlsRef.current.config.maxBufferLength = 45;
+        hlsRef.current.config.maxBufferLength = 50;
         hlsRef.current.config.maxMaxBufferLength = 90;
         hlsRef.current.config.liveSyncDurationCount = 7;
         hlsRef.current.startLoad();
@@ -286,12 +386,10 @@ export const WatchRoomPage: React.FC = () => {
         hlsRef.current.config.maxMaxBufferLength = 30;
         hlsRef.current.config.liveSyncDurationCount = 3;
       }
-    } else if (playerMode === 'clean-embed' && iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.postMessage({ type: 'SET_BUFFER_MODE', mode }, '*');
     }
 
     const msg = mode === 'anti-lag'
-      ? 'تم تفعيل وضع التخزين المؤقت المانع للتقطيع (Buffer Boost 30s)'
+      ? 'تم تفعيل وضع التخزين المؤقت المانع للتقطيع (Buffer Boost 45s)'
       : 'تم تفعيل وضع البث المباشر الفوري اللحظي';
     setQualityToast(msg);
     setTimeout(() => setQualityToast(null), 3500);
@@ -325,9 +423,9 @@ export const WatchRoomPage: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleToggleTheaterMode, handleToggleFullscreen, handleReload, handleToggleMute, isTheaterMode]);
 
-  // Native HLS Video engine
+  // Unified Direct HLS Video Engine for both Server 1 (المشغل النظيف المحمي) and Server 2 (السيرفر الاحتياطي)
   useEffect(() => {
-    if (playerMode !== 'native' || !currentChannel) {
+    if (!currentChannel) {
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
@@ -344,21 +442,44 @@ export const WatchRoomPage: React.FC = () => {
       hlsRef.current = null;
     }
 
-    const streamUrl = `/api/proxy-stream/${currentChannel.id}/live.m3u8?r=${retryKey}`;
+    const sourceParam = playerMode === 'server1' ? 'dembed' : playerMode === 'server2' ? 'cast' : 'wide';
+    const streamUrl = `/api/proxy-stream/${currentChannel.id}/live.m3u8?source=${sourceParam}&r=${retryKey}`;
+
+    const tryPlayDirect = () => {
+      video.muted = false;
+      video.volume = volume > 0.05 ? volume : 1.0;
+      video
+        .play()
+        .then(() => {
+          setIsMuted(false);
+          setPlayerStatus('playing');
+        })
+        .catch(() => {
+          // Browser blocked unmuted autoplay until first click on page
+          video.muted = true;
+          setIsMuted(true);
+          video.play().then(() => setPlayerStatus('playing')).catch(() => setPlayerStatus('playing'));
+        });
+    };
 
     if (Hls.isSupported()) {
       const isAntiLag = bufferMode === 'anti-lag';
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: !isAntiLag,
-        backBufferLength: 45,
-        maxBufferLength: isAntiLag ? 45 : 20,
+        defaultAudioCodec: 'mp4a.40.2',
+        maxAudioFramesDrift: 8,
+        backBufferLength: 60,
+        maxBufferLength: isAntiLag ? 50 : 20,
         maxMaxBufferLength: isAntiLag ? 90 : 40,
-        maxBufferSize: 40 * 1000 * 1000,
-        maxBufferHole: 0.5,
+        maxBufferSize: 50 * 1000 * 1000,
+        maxBufferHole: 1.5,
         liveSyncDurationCount: isAntiLag ? 7 : 3,
         liveMaxLatencyDurationCount: 15,
-        enableSoftwareAES: true
+        enableSoftwareAES: true,
+        manifestLoadingMaxRetry: 6,
+        levelLoadingMaxRetry: 6,
+        fragLoadingMaxRetry: 8
       });
 
       hlsRef.current = hls;
@@ -372,21 +493,24 @@ export const WatchRoomPage: React.FC = () => {
           levelsCount: lvls.length,
           currentResolution: lvls[0]?.height ? `${lvls[0].height}p FHD` : '1080p FHD'
         });
+        if (hls.audioTracks && hls.audioTracks.length > 0 && hls.audioTrack === -1) {
+          hls.audioTrack = 0;
+        }
         applyQualityToHls(selectedQuality);
-        video.play().then(() => setPlayerStatus('playing')).catch(() => setPlayerStatus('playing'));
+        tryPlayDirect();
       });
 
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              setPlayerMode('clean-embed');
+              hls.startLoad();
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
               hls.recoverMediaError();
               break;
             default:
-              setPlayerMode('clean-embed');
+              hls.destroy();
               break;
           }
         }
@@ -394,13 +518,8 @@ export const WatchRoomPage: React.FC = () => {
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = streamUrl;
       video.addEventListener('loadedmetadata', () => {
-        video.play().then(() => setPlayerStatus('playing')).catch(() => setPlayerStatus('playing'));
+        tryPlayDirect();
       });
-      video.addEventListener('error', () => {
-        setPlayerMode('clean-embed');
-      });
-    } else {
-      setPlayerMode('clean-embed');
     }
 
     return () => {
@@ -411,9 +530,8 @@ export const WatchRoomPage: React.FC = () => {
     };
   }, [currentChannel?.id, retryKey, playerMode, applyQualityToHls, selectedQuality, bufferMode]);
 
-  // Native Video stall watchdog
+  // Direct Video stall watchdog
   useEffect(() => {
-    if (playerMode !== 'native') return;
     const video = videoRef.current;
     if (!video) return;
 
@@ -490,11 +608,9 @@ export const WatchRoomPage: React.FC = () => {
     );
   }
 
-  const cleanEmbedSrc = `/api/clean-embed/player/${currentChannel.id}?r=${retryKey}&q=${selectedQuality}`;
-
   return (
     <div
-      className={`space-y-4 animate-in fade-in duration-200 transition-all ${
+      className={`space-y-3 animate-in fade-in duration-200 transition-all ${
         isTheaterMode ? 'max-w-none w-full' : 'max-w-7xl mx-auto'
       }`}
       dir="rtl"
@@ -507,40 +623,51 @@ export const WatchRoomPage: React.FC = () => {
         </div>
       )}
 
-      {/* Theater Video Viewport Container */}
+      {/* Theater Video Viewport Container (Direct HTML5 Video with Zero Iframe Audio Blocking) */}
       <div
         ref={containerRef}
+        onClick={() => {
+          if (isMuted) {
+            handleForceUnmute();
+          }
+        }}
         className={`relative w-full bg-black rounded-2xl overflow-hidden border border-stone-800/80 shadow-2xl flex items-center justify-center transition-all duration-300 ${
           isTheaterMode ? 'aspect-[16/9] sm:aspect-[21/9] max-h-[75vh]' : 'aspect-video'
         }`}
       >
-        {playerMode === 'clean-embed' ? (
-          <iframe
-            ref={iframeRef}
-            key={`embed-${currentChannel.id}-${retryKey}`}
-            src={cleanEmbedSrc}
-            className="w-full h-full border-0 bg-black"
-            allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-            allowFullScreen
-            sandbox="allow-scripts allow-same-origin allow-presentation allow-fullscreen"
-            title={currentChannel.name}
-            onLoad={() => setPlayerStatus('playing')}
-          />
-        ) : (
-          <video
-            ref={videoRef}
-            controls
-            autoPlay
-            playsInline
-            className="w-full h-full object-contain bg-black"
-            onPlaying={() => setPlayerStatus('playing')}
-            onWaiting={() => setPlayerStatus('loading')}
-          />
+        <video
+          ref={videoRef}
+          controls
+          autoPlay
+          playsInline
+          onVolumeChange={e => {
+            const v = e.currentTarget;
+            setIsMuted(v.muted || v.volume === 0);
+            setVolume(v.volume);
+          }}
+          className="w-full h-full object-contain bg-black"
+          onPlaying={() => setPlayerStatus('playing')}
+          onWaiting={() => setPlayerStatus('loading')}
+        />
+
+        {/* Prominent Floating Unmute Banner on ANY Server when Muted */}
+        {isMuted && (
+          <button
+            type="button"
+            onClick={e => {
+              e.stopPropagation();
+              handleForceUnmute();
+            }}
+            className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-emerald-500 hover:bg-emerald-400 text-stone-950 border-2 border-emerald-200 px-5 py-2.5 rounded-full text-xs sm:text-sm font-extrabold shadow-2xl flex items-center gap-2 transition hover:scale-105 cursor-pointer animate-bounce"
+          >
+            <Volume2 className="w-4 h-4" />
+            <span>🔊 اضغط هنا لتشغيل صوت البث (Unmute)</span>
+          </button>
         )}
 
         {/* Live Match Scoreboard Overlay (When Match is broadcast on this channel) */}
         {currentMatch && (
-          <div className="absolute top-3 right-3 left-3 sm:left-auto max-w-md z-20 pointer-events-none">
+          <div className="absolute top-3 right-3 max-w-xs sm:max-w-md z-20 pointer-events-none">
             <div className="bg-[#0b0c0e]/90 backdrop-blur-md border border-stone-700/60 rounded-xl p-2.5 shadow-xl flex items-center justify-between gap-3 pointer-events-auto">
               <div className="flex items-center gap-2 min-w-0">
                 {currentMatch.status === 'LIVE' ? (
@@ -567,149 +694,166 @@ export const WatchRoomPage: React.FC = () => {
           </div>
         )}
 
-        {/* Native Loading State */}
-        {playerMode === 'native' && playerStatus === 'loading' && (
+        {/* Loading State */}
+        {playerStatus === 'loading' && (
           <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-stone-400 gap-2 z-10 pointer-events-none">
             <RotateCw className="w-6 h-6 animate-spin text-emerald-400" />
             <span className="text-xs text-stone-300 font-medium">جاري مزامنة البث المباشر...</span>
           </div>
         )}
-
-        {/* Bottom Floating Control Bar on Player */}
-        <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none z-20">
-          <div className="flex items-center gap-2 pointer-events-auto">
-            {/* Fullscreen Button */}
-            <button
-              type="button"
-              onClick={handleToggleFullscreen}
-              className="p-2 rounded-xl bg-black/70 hover:bg-black/90 backdrop-blur-md text-stone-300 hover:text-white border border-stone-700/50 transition shadow-lg"
-              title="ملء الشاشة [F]"
-              aria-label="ملء الشاشة"
-            >
-              <Maximize className="w-4 h-4" />
-            </button>
-
-            {/* Theater Mode Button */}
-            <button
-              type="button"
-              onClick={handleToggleTheaterMode}
-              className={`p-2 rounded-xl backdrop-blur-md border transition shadow-lg ${
-                isTheaterMode
-                  ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-400'
-                  : 'bg-black/70 hover:bg-black/90 border-stone-700/50 text-stone-300 hover:text-white'
-              }`}
-              title="وضع المسرح السينمائي [T]"
-              aria-label="وضع المسرح"
-            >
-              {isTheaterMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </button>
-
-            {/* Mute / Unmute Button (For native mode) */}
-            {playerMode === 'native' && (
-              <button
-                type="button"
-                onClick={handleToggleMute}
-                className="p-2 rounded-xl bg-black/70 hover:bg-black/90 backdrop-blur-md text-stone-300 hover:text-white border border-stone-700/50 transition shadow-lg"
-                title="كتم / تشغيل الصوت [M]"
-                aria-label="كتم الصوت"
-              >
-                {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4" />}
-              </button>
-            )}
-
-            {/* Audio Booster (+50%) */}
-            {playerMode === 'native' && (
-              <button
-                type="button"
-                onClick={handleToggleAudioBoost}
-                className={`p-2 rounded-xl backdrop-blur-md border transition shadow-lg ${
-                  isAudioBoosted
-                    ? 'bg-amber-500/20 border-amber-500/60 text-amber-400 font-bold'
-                    : 'bg-black/70 hover:bg-black/90 border-stone-700/50 text-stone-300 hover:text-white'
-                }`}
-                title="مضخم صوت المعلق (+50%)"
-                aria-label="مضخم الصوت"
-              >
-                <Volume1 className="w-4 h-4" />
-              </button>
-            )}
-
-            {/* Picture in Picture Button */}
-            <button
-              type="button"
-              onClick={handleTogglePiP}
-              className="p-2 rounded-xl bg-black/70 hover:bg-black/90 backdrop-blur-md text-stone-300 hover:text-white border border-stone-700/50 transition shadow-lg"
-              title="صورة داخل صورة (PiP)"
-              aria-label="صورة داخل صورة"
-            >
-              <ExternalLink className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 pointer-events-auto">
-            {/* Anti-Lag Indicator Badge */}
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-black/70 backdrop-blur-md border border-stone-700/50 text-[11px] text-stone-300">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{bufferMode === 'anti-lag' ? 'حماية ضد التقطيع نشطة' : 'بث لحظي'}</span>
-            </div>
-
-            {/* Reload Stream Button */}
-            <button
-              type="button"
-              onClick={handleReload}
-              className="p-2 rounded-xl bg-black/70 hover:bg-black/90 backdrop-blur-md text-stone-300 hover:text-white border border-stone-700/50 transition shadow-lg"
-              title="إعادة تحميل البث [R]"
-              aria-label="إعادة تحميل البث"
-            >
-              <RotateCw className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
       </div>
 
-      {/* Multi-Server Selection Bar */}
-      <div className="bg-[#121316]/90 border border-stone-800/80 rounded-2xl p-3 flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar text-xs">
-          <span className="text-stone-400 font-medium shrink-0 flex items-center gap-1.5 ml-1">
-            <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-            <span className="font-bold text-stone-200">سيرفرات البث:</span>
-          </span>
-
-          {/* Server 1 */}
+      {/* Dedicated Audio, Volume, Server & Viewport Control Bar (Directly below video player!) */}
+      <div className="bg-[#121316]/95 border border-stone-800/80 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3">
+        {/* Left group: Prominent Sound / Unmute Controls & Volume Slider */}
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
-            onClick={() => setPlayerMode('clean-embed')}
-            className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shrink-0 text-xs ${
-              playerMode === 'clean-embed'
+            onClick={handleToggleMute}
+            className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition shadow-md cursor-pointer ${
+              isMuted
+                ? 'bg-emerald-500 hover:bg-emerald-400 text-stone-950 animate-pulse'
+                : 'bg-stone-900 hover:bg-stone-800 text-stone-200 border border-stone-700'
+            }`}
+            title="تشغيل أو كتم الصوت [M]"
+          >
+            {isMuted ? (
+              <>
+                <VolumeX className="w-4 h-4 text-stone-950" />
+                <span>🔊 تشغيل الصوت (Unmute)</span>
+              </>
+            ) : (
+              <>
+                <Volume2 className="w-4 h-4 text-emerald-400" />
+                <span>الصوت يعمل (كتم)</span>
+              </>
+            )}
+          </button>
+
+          {/* Interactive Volume Slider */}
+          <div className="flex items-center gap-2 bg-stone-900 border border-stone-800 px-3 py-1.5 rounded-xl">
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={isMuted ? 0 : volume}
+              onChange={e => handleVolumeChange(parseFloat(e.target.value))}
+              className="w-20 sm:w-24 accent-emerald-500 cursor-pointer h-1.5 bg-stone-700 rounded-lg"
+              aria-label="مستوى الصوت"
+              title="التحكم بمستوى الصوت"
+            />
+            <span className="text-[11px] font-mono-num text-stone-300 w-8 text-left">
+              {isMuted ? '0%' : `${Math.round(volume * 100)}%`}
+            </span>
+          </div>
+
+          {/* Commentary Audio Booster (+80%) */}
+          <button
+            type="button"
+            onClick={handleToggleAudioBoost}
+            className={`px-3 py-2 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 cursor-pointer ${
+              isAudioBoosted
+                ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 font-bold'
+                : 'bg-stone-900 hover:bg-stone-850 border-stone-800 text-stone-300 hover:text-white'
+            }`}
+            title="مضخم صوت المعلق (+80%)"
+          >
+            <Volume1 className="w-3.5 h-3.5 text-amber-400" />
+            <span>{isAudioBoosted ? 'مضخم الصوت نشط (+80%)' : 'تقوية صوت المعلق'}</span>
+          </button>
+        </div>
+
+        {/* Right group: 3 Distinct Upstream Servers & Viewport Actions */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] font-bold text-stone-400 hidden sm:inline">سيرفرات البث:</span>
+          {/* Server 1: Dembed Edge CDN */}
+          <button
+            type="button"
+            onClick={() => {
+              setPlayerMode('server1');
+              setQualityToast('تم التبديل إلى سيرفر 1 (المشغل النظيف المحمي - Dembed FHD)');
+              setTimeout(() => setQualityToast(null), 2500);
+            }}
+            className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shrink-0 text-xs cursor-pointer ${
+              playerMode === 'server1'
                 ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 font-bold shadow-sm'
                 : 'bg-stone-900 hover:bg-stone-850 border border-stone-800 text-stone-400 hover:text-stone-200'
             }`}
           >
-            <Globe className="w-3.5 h-3.5" />
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
             <span>سيرفر 1 (المشغل النظيف المحمي)</span>
           </button>
 
-          {/* Server 2 */}
+          {/* Server 2: Cast Independent CDN */}
           <button
             type="button"
-            onClick={() => setPlayerMode('native')}
-            className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shrink-0 text-xs ${
-              playerMode === 'native'
+            onClick={() => {
+              setPlayerMode('server2');
+              setQualityToast('تم التبديل إلى سيرفر 2 (سيرفر Cast المستقل)');
+              setTimeout(() => setQualityToast(null), 2500);
+            }}
+            className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shrink-0 text-xs cursor-pointer ${
+              playerMode === 'server2'
                 ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 font-bold shadow-sm'
                 : 'bg-stone-900 hover:bg-stone-850 border border-stone-800 text-stone-400 hover:text-stone-200'
             }`}
           >
-            <Tv className="w-3.5 h-3.5" />
-            <span>سيرفر 2 (مشغل HTML5 المباشر + مانع التقطيع)</span>
+            <Radio className="w-3.5 h-3.5 text-blue-400" />
+            <span>سيرفر 2 (سيرفر Cast البديل)</span>
           </button>
-        </div>
 
-        {/* Server Status Indicator */}
-        <div className="flex items-center gap-2 text-xs text-stone-400">
-          <span className="flex items-center gap-1 text-[11px] text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-2 py-0.5 rounded-lg">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>السيرفر متصل ويعمل بكفاءة</span>
-          </span>
+          {/* Server 3: WideIPTV Backup CDN */}
+          <button
+            type="button"
+            onClick={() => {
+              setPlayerMode('server3');
+              setQualityToast('تم التبديل إلى سيرفر 3 (سيرفر Wide الاحتياطي)');
+              setTimeout(() => setQualityToast(null), 2500);
+            }}
+            className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shrink-0 text-xs cursor-pointer ${
+              playerMode === 'server3'
+                ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 font-bold shadow-sm'
+                : 'bg-stone-900 hover:bg-stone-850 border border-stone-800 text-stone-400 hover:text-stone-200'
+            }`}
+          >
+            <Tv className="w-3.5 h-3.5 text-amber-400" />
+            <span>سيرفر 3 (الاحتياطي Wide)</span>
+          </button>
+
+          {/* Picture in Picture */}
+          <button
+            type="button"
+            onClick={handleTogglePiP}
+            className="p-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-stone-300 hover:text-white border border-stone-800 transition"
+            title="صورة داخل صورة (PiP)"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </button>
+
+          {/* Theater Mode */}
+          <button
+            type="button"
+            onClick={handleToggleTheaterMode}
+            className={`p-2 rounded-xl border transition ${
+              isTheaterMode
+                ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-400'
+                : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-300 hover:text-white'
+            }`}
+            title="وضع المسرح السينمائي [T]"
+          >
+            {isTheaterMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
+
+          {/* Fullscreen */}
+          <button
+            type="button"
+            onClick={handleToggleFullscreen}
+            className="p-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-stone-300 hover:text-white border border-stone-800 transition"
+            title="ملء الشاشة [F]"
+          >
+            <Maximize className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -784,12 +928,12 @@ export const WatchRoomPage: React.FC = () => {
                   </div>
                   <p className="text-stone-400 leading-relaxed text-[10px]">
                     {streamSourceInfo.isSingleBitrate
-                      ? 'يبث المصدر القناة بدقة أصلية واحدة (1080p FHD). عند ضعف الإنترنت، تفعيل "وضع مانع التقطيع" هو الحل الفعلي بدلاً من البحث عن جودات غير متوفرة من المصدر.'
-                      : 'يوفر المصدر عدة مسارات للدقة، يمكنك التبديل بينها أدناه.'}
+                      ? 'يبث المصدر القناة بدقة أصلية واحدة (1080p FHD). عند ضعف الإنترنت، تفعيل "مانع التقطيع" يضاعف التخزين المسبق لمنع التوقف.'
+                      : `يوفر المصدر (${streamSourceInfo.levelsCount}) مسارات للدقة، يمكنك التبديل بينها أدناه.`}
                   </p>
                 </div>
 
-                {/* Section: Anti-Lag Buffer Modes (The real fix for lagging internet) */}
+                {/* Section: Anti-Lag Buffer Modes */}
                 <div className="space-y-1.5">
                   <div className="text-[11px] font-bold text-stone-300">
                     أوضاع منع التقطيع (Buffer Control):
@@ -808,7 +952,7 @@ export const WatchRoomPage: React.FC = () => {
                         <span className="font-bold">مانع التقطيع</span>
                         {bufferMode === 'anti-lag' && <Check className="w-3 h-3 text-emerald-400" />}
                       </div>
-                      <div className="text-[9px] text-stone-500">تخزين مؤقت 30s</div>
+                      <div className="text-[9px] text-stone-500">تخزين مؤقت 45s</div>
                     </button>
 
                     <button
@@ -824,18 +968,18 @@ export const WatchRoomPage: React.FC = () => {
                         <span className="font-bold">بث لحظي فوري</span>
                         {bufferMode === 'low-latency' && <Check className="w-3 h-3 text-emerald-400" />}
                       </div>
-                      <div className="text-[9px] text-stone-500">تأخير أدنى (5s)</div>
+                      <div className="text-[9px] text-stone-500">تأخير أدنى</div>
                     </button>
                   </div>
                 </div>
 
-                {/* Section: Resolution Options */}
+                {/* Section: All Resolution Options */}
                 <div className="space-y-1 pt-1 border-t border-stone-800">
                   <div className="text-[11px] font-bold text-stone-300">
                     الدقة المطلوبة:
                   </div>
                   <div className="space-y-1">
-                    {QUALITY_OPTIONS.slice(0, 3).map(opt => {
+                    {QUALITY_OPTIONS.map(opt => {
                       const isSelected = selectedQuality === opt.id;
                       return (
                         <button
@@ -863,16 +1007,16 @@ export const WatchRoomPage: React.FC = () => {
 
                 {/* Section: Engine Switcher Advice */}
                 <div className="pt-2 border-t border-stone-800 flex items-center justify-between">
-                  <span className="text-[10px] text-stone-400">إذا واجهت بطء بالسيرفر:</span>
+                  <span className="text-[10px] text-stone-400">تبديل سيرفر المصدر:</span>
                   <button
                     type="button"
                     onClick={() => {
-                      setPlayerMode(prev => prev === 'clean-embed' ? 'native' : 'clean-embed');
+                      setPlayerMode(prev => (prev === 'server1' ? 'server2' : prev === 'server2' ? 'server3' : 'server1'));
                       setQualityMenuOpen(false);
                     }}
                     className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 underline"
                   >
-                    تبديل المشغل ({playerMode === 'clean-embed' ? 'HTML5 Native' : 'مشغل الويب'})
+                    انتقل إلى {playerMode === 'server1' ? 'سيرفر 2 (Cast)' : playerMode === 'server2' ? 'سيرفر 3 (Wide)' : 'سيرفر 1 (الرئيسي)'}
                   </button>
                 </div>
               </div>
@@ -882,19 +1026,24 @@ export const WatchRoomPage: React.FC = () => {
           {/* Engine Switcher */}
           <button
             type="button"
-            onClick={() => setPlayerMode(prev => prev === 'clean-embed' ? 'native' : 'clean-embed')}
+            onClick={() => setPlayerMode(prev => (prev === 'server1' ? 'server2' : prev === 'server2' ? 'server3' : 'server1'))}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-900 border border-stone-800 text-xs text-stone-300 hover:text-white transition"
-            title="تبديل محرك المشغل"
+            title="تبديل سيرفر المصدر"
           >
-            {playerMode === 'clean-embed' ? (
+            {playerMode === 'server1' ? (
               <>
                 <Globe className="w-3.5 h-3.5 text-emerald-400" />
-                <span>مشغل الويب</span>
+                <span>سيرفر 1 (Dembed)</span>
+              </>
+            ) : playerMode === 'server2' ? (
+              <>
+                <Radio className="w-3.5 h-3.5 text-blue-400" />
+                <span>سيرفر 2 (Cast)</span>
               </>
             ) : (
               <>
-                <Tv className="w-3.5 h-3.5 text-blue-400" />
-                <span>مشغل HTML5</span>
+                <Tv className="w-3.5 h-3.5 text-amber-400" />
+                <span>سيرفر 3 (Wide)</span>
               </>
             )}
           </button>
@@ -984,7 +1133,7 @@ export const WatchRoomPage: React.FC = () => {
                   setSwitcherSearch(e.target.value);
                   setSwitcherPage(1);
                 }}
-                placeholder="ابحث عن قناة للتبديل..."
+                placeholder="ابحث عن قناة أو رقم..."
                 className="w-full bg-stone-900 border border-stone-800 rounded-xl pr-8 pl-3 py-1.5 text-xs text-stone-200 placeholder-stone-500 focus:outline-none focus:border-stone-600 transition"
               />
             </div>
@@ -1051,12 +1200,12 @@ export const WatchRoomPage: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {matches.slice(0, 10).map(m => {
-                  const isCurrentOnAir = m.channels && m.channels.some(c => c.channel_id === currentChannel.id);
+                {matches.slice(0, 16).map(m => {
+                  const isCurrentOnAir = m.channels && m.channels.some(c => Number(c.channel_id) === Number(currentChannel.id));
                   return (
                     <div
                       key={m.id}
-                      className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs ${
+                      className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
                         isCurrentOnAir
                           ? 'bg-emerald-950/20 border-emerald-500/40'
                           : 'bg-stone-900/80 border-stone-800/80'
@@ -1077,31 +1226,32 @@ export const WatchRoomPage: React.FC = () => {
                         <div className="font-bold text-stone-200 truncate">
                           {m.teamA.name} {m.scoreA !== null ? `${m.scoreA} - ${m.scoreB}` : 'ضد'} {m.teamB.name}
                         </div>
-
-                        {m.commentator && (
-                          <div className="text-[10px] text-stone-500">
-                            المعلق: {m.commentator}
-                          </div>
-                        )}
                       </div>
 
                       {m.channels && m.channels.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const targetChId = m.channels[0].channel_id;
-                            if (targetChId !== currentChannel.id) {
-                              navigate(`/watchroom/${targetChId}`);
-                            }
-                          }}
-                          className={`px-3 py-1.5 rounded-lg font-bold text-xs shrink-0 transition ${
-                            isCurrentOnAir
-                              ? 'bg-emerald-500 text-stone-950'
-                              : 'bg-stone-800 hover:bg-stone-700 text-stone-200'
-                          }`}
-                        >
-                          {isCurrentOnAir ? 'تبث هنا الآن' : `انتقل إلى ${m.channels[0].channel_name}`}
-                        </button>
+                        <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                          {m.channels.slice(0, 2).map(ch => {
+                            const isThisChannel = Number(ch.channel_id) === Number(currentChannel.id);
+                            return (
+                              <button
+                                key={ch.channel_id}
+                                type="button"
+                                onClick={() => {
+                                  if (!isThisChannel) {
+                                    navigate(`/watchroom/${ch.channel_id}`);
+                                  }
+                                }}
+                                className={`px-2.5 py-1 rounded-lg font-bold text-[11px] shrink-0 transition ${
+                                  isThisChannel
+                                    ? 'bg-emerald-500 text-stone-950'
+                                    : 'bg-stone-800 hover:bg-stone-700 text-stone-200'
+                                }`}
+                              >
+                                {isThisChannel ? `تبث هنا (${ch.channel_name})` : `${ch.channel_name}`}
+                              </button>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
                   );
