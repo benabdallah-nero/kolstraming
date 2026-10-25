@@ -56,9 +56,16 @@ export const MonetagAdManager: React.FC = () => {
     }
   }, [location.pathname, config.previewMode, config.enabled]);
 
-  // Inject real Monetag scripts when real Zone IDs are present
+  // Inject real Monetag scripts & register /sw.js Service Worker when enabled
   useEffect(() => {
     if (!config.enabled) return;
+
+    // 0. Register Monetag Service Worker (/sw.js -> zoneId: 12122265, domain: 5gvci.com)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
+        // Ignore registration error in restricted preview iframes
+      });
+    }
 
     // 1. In-Page Push (IPP) Injection
     // Official Monetag specification:

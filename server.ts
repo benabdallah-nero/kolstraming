@@ -11,7 +11,11 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 // Mount Vite or serve static files
 async function startServer() {
-  // Explicit SEO routes before Vite SPA fallback
+  // Explicit SEO and Service Worker routes before Vite SPA fallback
+  app.get('/sw.js', (_req, res) => {
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.type('application/javascript').sendFile(path.resolve(__dirname, 'public', 'sw.js'));
+  });
   app.get('/robots.txt', (_req, res) => {
     res.type('text/plain').sendFile(path.resolve(__dirname, 'public', 'robots.txt'));
   });

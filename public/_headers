@@ -1,0 +1,11 @@
+/sw.js
+  Content-Type: application/javascript; charset=utf-8
+  Service-Worker-Allowed: /
+  Cache-Control: public, max-age=0, must-revalidate
+
+/*
+  Access-Control-Allow-Origin: *
+  Access-Control-Allow-Methods: GET, POST, OPTIONS
+  Access-Control-Allow-Headers: Content-Type, Authorization, Range, X-Requested-With
+  X-Content-Type-Options: nosniff
+  Permissions-Policy: autoplay=*, picture-in-picture=*, fullscreen=*

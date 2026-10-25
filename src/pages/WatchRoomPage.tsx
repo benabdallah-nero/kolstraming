@@ -40,6 +40,7 @@ import { useApp } from '../context/AppContext';
 import { Channel, QualityResolution } from '../types';
 import { Pagination } from '../components/Pagination';
 import { usePageSeo } from '../hooks/usePageSeo';
+import { getApiUrl } from '../utils/api';
 
 interface QualityOptionItem {
   id: QualityResolution;
@@ -94,7 +95,7 @@ const MultiViewStreamCell: React.FC<MultiViewCellProps> = ({
     }
 
     const srcKey = serverMode === 'server1' ? 'dembed' : serverMode === 'server2' ? 'cast' : 'wide';
-    const streamUrl = `/api/proxy-stream/${channel.id}/live.m3u8?source=${srcKey}&r=${retryCount}`;
+    const streamUrl = getApiUrl(`/api/proxy-stream/${channel.id}/live.m3u8?source=${srcKey}&r=${retryCount}`);
 
     const startPlay = () => {
       video.muted = !isAudioActive;
@@ -311,7 +312,7 @@ export const WatchRoomPage: React.FC = () => {
     if (isNaN(numId) || numId <= 0) return;
 
     let cancelled = false;
-    fetch(`/api/resolve-m3u8/${numId}`)
+    fetch(getApiUrl(`/api/resolve-m3u8/${numId}`))
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
         if (!cancelled && data && data.success && data.channelName) {
@@ -364,8 +365,8 @@ export const WatchRoomPage: React.FC = () => {
     canonicalPath: currentChannel ? `/watchroom/${currentChannel.id}` : '/watchroom'
   });
 
-  // Player state (3 distinct upstream CDNs: server1=dembed, server2=cast, server3=wide)
-  const [playerMode, setPlayerMode] = useState<'server1' | 'server2' | 'server3'>('server1');
+  // Player state (3 distinct upstream CDNs: server1=dembed, server2=cast, server3=wide, or direct embed)
+  const [playerMode, setPlayerMode] = useState<'server1' | 'server2' | 'server3' | 'direct'>('server1');
   const [playerStatus, setPlayerStatus] = useState<'loading' | 'playing' | 'error'>('loading');
   const [retryKey, setRetryKey] = useState<number>(0);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
@@ -836,10 +837,13 @@ export const WatchRoomPage: React.FC = () => {
 
   // Unified Direct HLS Video Engine for Single Stream Mode (Server 1 = dembed, Server 2 = cast, Server 3 = wide)
   useEffect(() => {
-    if (!currentChannel || isMultiViewMode) {
+    if (!currentChannel || isMultiViewMode || playerMode === 'direct') {
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
+      }
+      if (playerMode === 'direct') {
+        setPlayerStatus('playing');
       }
       return;
     }
@@ -854,7 +858,7 @@ export const WatchRoomPage: React.FC = () => {
     }
 
     const sourceParam = playerMode === 'server1' ? 'dembed' : playerMode === 'server2' ? 'cast' : 'wide';
-    const streamUrl = `/api/proxy-stream/${currentChannel.id}/live.m3u8?source=${sourceParam}&r=${retryKey}`;
+    const streamUrl = getApiUrl(`/api/proxy-stream/${currentChannel.id}/live.m3u8?source=${sourceParam}&r=${retryKey}`);
 
     const tryPlayDirect = () => {
       video.muted = false;
@@ -888,9 +892,9 @@ export const WatchRoomPage: React.FC = () => {
         liveSyncDurationCount: isAntiLag ? 7 : 3,
         liveMaxLatencyDurationCount: 15,
         enableSoftwareAES: true,
-        manifestLoadingMaxRetry: 6,
-        levelLoadingMaxRetry: 6,
-        fragLoadingMaxRetry: 8
+        manifestLoadingMaxRetry: 4,
+        levelLoadingMaxRetry: 4,
+        fragLoadingMaxRetry: 6
       });
 
       hlsRef.current = hls;
@@ -911,16 +915,23 @@ export const WatchRoomPage: React.FC = () => {
         tryPlayDirect();
       });
 
+      let netErrorCount = 0;
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              hls.startLoad();
+              netErrorCount++;
+              if (netErrorCount > 2) {
+                setPlayerStatus('error');
+              } else {
+                hls.startLoad();
+              }
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
               hls.recoverMediaError();
               break;
             default:
+              setPlayerStatus('error');
               hls.destroy();
               break;
           }
@@ -930,6 +941,9 @@ export const WatchRoomPage: React.FC = () => {
       video.src = streamUrl;
       video.addEventListener('loadedmetadata', () => {
         tryPlayDirect();
+      });
+      video.addEventListener('error', () => {
+        setPlayerStatus('error');
       });
     }
 
@@ -1130,25 +1144,36 @@ export const WatchRoomPage: React.FC = () => {
             isTheaterMode ? 'aspect-[16/9] sm:aspect-[21/9] max-h-[75vh]' : 'aspect-video'
           }`}
         >
-          <video
-            ref={videoRef}
-            controls
-            autoPlay
-            playsInline
-            onVolumeChange={e => {
-              const v = e.currentTarget;
-              setIsMuted(v.muted || v.volume === 0);
-              setVolume(v.volume);
-            }}
-            className={`w-full h-full bg-black ${
-              videoFit === 'cover' ? 'object-cover' : videoFit === 'fill' ? 'object-fill' : 'object-contain'
-            }`}
-            onPlaying={() => setPlayerStatus('playing')}
-            onWaiting={() => setPlayerStatus('loading')}
-          />
+          {playerMode === 'direct' ? (
+            <iframe
+              ref={iframeRef}
+              src={`https://dembed.st/embed/stream-${currentChannel.id}.php`}
+              className="w-full h-full border-0 bg-black"
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+              allowFullScreen
+              title={currentChannel.name}
+            />
+          ) : (
+            <video
+              ref={videoRef}
+              controls
+              autoPlay
+              playsInline
+              onVolumeChange={e => {
+                const v = e.currentTarget;
+                setIsMuted(v.muted || v.volume === 0);
+                setVolume(v.volume);
+              }}
+              className={`w-full h-full bg-black ${
+                videoFit === 'cover' ? 'object-cover' : videoFit === 'fill' ? 'object-fill' : 'object-contain'
+              }`}
+              onPlaying={() => setPlayerStatus('playing')}
+              onWaiting={() => setPlayerStatus('loading')}
+            />
+          )}
 
-          {/* Prominent Floating Unmute Banner when Muted */}
-          {isMuted && (
+          {/* Prominent Floating Unmute Banner when Muted (in native video mode) */}
+          {isMuted && playerMode !== 'direct' && (
             <button
               type="button"
               onClick={e => {
@@ -1184,7 +1209,7 @@ export const WatchRoomPage: React.FC = () => {
               <div className="flex justify-between">
                 <span className="font-sans text-stone-400">السيرفر:</span>
                 <span className="text-stone-100 font-bold">
-                  {playerMode === 'server1' ? 'Dembed FHD' : playerMode === 'server2' ? 'Cast CDN' : 'WideIPTV'}
+                  {playerMode === 'server1' ? 'Dembed FHD' : playerMode === 'server2' ? 'Cast CDN' : playerMode === 'server3' ? 'WideIPTV' : 'Direct Embed'}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -1221,8 +1246,43 @@ export const WatchRoomPage: React.FC = () => {
             </div>
           )}
 
+          {/* Error Recovery State */}
+          {playerStatus === 'error' && playerMode !== 'direct' && (
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center z-20 space-y-3">
+              <AlertCircle className="w-9 h-9 text-amber-400" />
+              <div className="text-sm font-bold text-stone-100">تعذر تحميل البث عبر هذا السيرفر</div>
+              <p className="text-xs text-stone-400 max-w-sm">
+                يمكنك التبديل إلى سيرفر 4 (المشغل المباشر) للتشغيل الفوري، أو اختيار سيرفر آخر.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlayerMode('direct');
+                    setPlayerStatus('playing');
+                    showToast('تم التبديل إلى سيرفر 4 (المشغل المباشر)');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold text-xs transition cursor-pointer"
+                >
+                  تشغيل عبر المشغل المباشر
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = playerMode === 'server1' ? 'server2' : playerMode === 'server2' ? 'server3' : 'server1';
+                    setPlayerMode(next);
+                    handleReload();
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-200 text-xs font-bold transition cursor-pointer"
+                >
+                  تجربة سيرفر آخر
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Loading State */}
-          {playerStatus === 'loading' && (
+          {playerStatus === 'loading' && playerMode !== 'direct' && (
             <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center text-stone-300 gap-2 z-10 pointer-events-none">
               <RotateCw className="w-6 h-6 animate-spin text-emerald-400" />
               <span className="text-xs font-medium">جاري تشغيل البث المباشر...</span>
@@ -1330,8 +1390,8 @@ export const WatchRoomPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Row B: Clean Single-Row 3-Server Segmented Switcher */}
-          <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-stone-800/60">
+          {/* Row B: Clean Single-Row 4-Server Segmented Switcher */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1 border-t border-stone-800/60">
             <button
               type="button"
               onClick={() => {
@@ -1378,6 +1438,23 @@ export const WatchRoomPage: React.FC = () => {
             >
               <Tv className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span className="truncate">سيرفر 3 (Wide)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setPlayerMode('direct');
+                setPlayerStatus('playing');
+                showToast('تم التبديل إلى سيرفر 4 (المشغل المباشر)');
+              }}
+              className={`min-h-[38px] px-2 py-1.5 rounded-xl transition flex items-center justify-center gap-1.5 text-xs font-bold cursor-pointer whitespace-nowrap ${
+                playerMode === 'direct'
+                  ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 shadow-sm'
+                  : 'bg-stone-900/80 hover:bg-stone-800 border border-stone-800/80 text-stone-400 hover:text-stone-200'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+              <span className="truncate">سيرفر 4 (مباشر)</span>
             </button>
           </div>
 

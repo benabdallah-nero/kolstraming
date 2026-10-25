@@ -92,6 +92,20 @@ const HISTORY_STORAGE_KEY = 'kolstream_watch_history';
 const REMINDERS_STORAGE_KEY = 'kolstream_match_reminders';
 const THEME_STORAGE_KEY = 'kolstream_ui_theme';
 
+import { STATIC_CHANNELS } from '../data/staticChannels';
+import { STATIC_MATCHES, STATIC_EPG } from '../data/staticMatches';
+
+const getApiUrl = (endpoint: string): string => {
+  const envBase = (import.meta as any).env?.VITE_API_BASE_URL || (import.meta as any).env?.VITE_API_URL || '';
+  if (envBase) {
+    return `${envBase.replace(/\/+$/, '')}${endpoint}`;
+  }
+  return endpoint;
+};
+
+const CHANNELS_CACHE_KEY = 'kolstream_cached_channels_v2';
+const MATCHES_CACHE_KEY = 'kolstream_cached_matches_v2';
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<ThemeId>(() => {
     try {
@@ -118,17 +132,45 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [loadingChannels, setLoadingChannels] = useState<boolean>(true);
+  // Initialize channels with cached data or bundled static catalog (NEVER 0 channels)
+  const [channels, setChannels] = useState<Channel[]>(() => {
+    try {
+      const cached = localStorage.getItem(CHANNELS_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return STATIC_CHANNELS;
+  });
+  const [loadingChannels, setLoadingChannels] = useState<boolean>(false);
   const [channelsError, setChannelsError] = useState<string | null>(null);
 
-  const [matches, setMatches] = useState<LiveMatch[]>([]);
-  const [loadingMatches, setLoadingMatches] = useState<boolean>(true);
+  // Initialize matches with cached data or static fallback
+  const [matches, setMatches] = useState<LiveMatch[]>(() => {
+    try {
+      const cached = localStorage.getItem(MATCHES_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return STATIC_MATCHES;
+  });
+  const [loadingMatches, setLoadingMatches] = useState<boolean>(false);
   const [matchesError, setMatchesError] = useState<string | null>(null);
-  const [lastMatchesUpdated, setLastMatchesUpdated] = useState<Date | null>(null);
+  const [lastMatchesUpdated, setLastMatchesUpdated] = useState<Date | null>(() => new Date());
 
-  const [epg, setEpg] = useState<Record<number, BroadcastInfo>>({});
-  const [loadingEpg, setLoadingEpg] = useState<boolean>(true);
+  const [epg, setEpg] = useState<Record<number, BroadcastInfo>>(() => STATIC_EPG);
+  const [loadingEpg, setLoadingEpg] = useState<boolean>(false);
 
   const [favorites, setFavorites] = useState<number[]>(() => {
     try {
@@ -245,21 +287,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [matchReminders]);
 
   const fetchChannels = useCallback(async () => {
-    setLoadingChannels(true);
     setChannelsError(null);
     try {
-      const res = await fetch('/api/channels');
-      if (!res.ok) {
-        throw new Error(`HTTP Error ${res.status}`);
+      const targetUrl = getApiUrl('/api/channels');
+      const res = await fetch(targetUrl, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(6000)
+      });
+
+      const contentType = res.headers.get('content-type') || '';
+      // If 404 or static host returns HTML doctype (e.g. Cloudflare Pages SPA rewrite)
+      if (!res.ok || !contentType.includes('application/json')) {
+        setChannels(prev => (prev.length > 0 ? prev : STATIC_CHANNELS));
+        return;
       }
+
       const data = await res.json();
-      if (data && data.success && Array.isArray(data.channels)) {
+      if (data && data.success && Array.isArray(data.channels) && data.channels.length > 0) {
         setChannels(data.channels);
+        try {
+          localStorage.setItem(CHANNELS_CACHE_KEY, JSON.stringify(data.channels));
+        } catch {
+          // ignore
+        }
       } else {
-        setChannels([]);
+        setChannels(prev => (prev.length > 0 ? prev : STATIC_CHANNELS));
       }
-    } catch (err: any) {
-      setChannelsError(err.message || 'تعذر جلب قائمة القنوات');
+    } catch {
+      // Always preserve bundled or cached channels; never reset to 0
+      setChannels(prev => (prev.length > 0 ? prev : STATIC_CHANNELS));
     } finally {
       setLoadingChannels(false);
     }
@@ -267,19 +323,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const fetchMatches = useCallback(async () => {
     try {
-      const res = await fetch('/api/live-matches');
-      if (!res.ok) {
-        throw new Error(`HTTP Error ${res.status}`);
+      const targetUrl = getApiUrl('/api/live-matches');
+      const res = await fetch(targetUrl, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(6000)
+      });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!res.ok || !contentType.includes('application/json')) {
+        setMatches(prev => (prev.length > 0 ? prev : STATIC_MATCHES));
+        return;
       }
+
       const data = await res.json();
-      if (data && data.success && Array.isArray(data.matches)) {
+      if (data && data.success && Array.isArray(data.matches) && data.matches.length > 0) {
         setMatches(data.matches);
         setLastMatchesUpdated(new Date());
+        try {
+          localStorage.setItem(MATCHES_CACHE_KEY, JSON.stringify(data.matches));
+        } catch {
+          // ignore
+        }
       } else {
-        setMatches([]);
+        setMatches(prev => (prev.length > 0 ? prev : STATIC_MATCHES));
       }
-    } catch (err: any) {
-      setMatchesError(err.message || 'تعذر تحديث جدول المباريات المباشرة');
+    } catch {
+      setMatches(prev => (prev.length > 0 ? prev : STATIC_MATCHES));
     } finally {
       setLoadingMatches(false);
     }
@@ -287,14 +356,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const fetchEpg = useCallback(async () => {
     try {
-      const res = await fetch('/api/epg/live');
-      if (!res.ok) return;
+      const targetUrl = getApiUrl('/api/epg/live');
+      const res = await fetch(targetUrl, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(4500)
+      });
+      const contentType = res.headers.get('content-type') || '';
+      if (!res.ok || !contentType.includes('application/json')) return;
       const data = await res.json();
       if (data && data.success && data.epg) {
         setEpg(data.epg);
       }
     } catch {
-      // Graceful fallback
+      // Graceful fallback to existing EPG
     } finally {
       setLoadingEpg(false);
     }
