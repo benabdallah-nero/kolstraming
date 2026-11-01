@@ -8,7 +8,7 @@ import { Footer } from './components/Footer';
 import { HomePage } from './pages/HomePage';
 import { WatchRoomPage } from './pages/WatchRoomPage';
 import { SchedulePage } from './pages/SchedulePage';
-import { FavoritesPage } from './pages/FavoritesPage';
+import { LeaguesPage } from './pages/LeaguesPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { TermsPage } from './pages/TermsPage';
 import { DmcaPage } from './pages/DmcaPage';
@@ -21,31 +21,30 @@ export default function App() {
           className="min-h-screen theme-canvas flex flex-col pb-20 md:pb-0 antialiased selection:bg-emerald-500/30 selection:text-white transition-colors duration-300"
           dir="rtl"
         >
-          {/* Desktop Sticky Header */}
+          {/* Sticky Consumer Header */}
           <Navbar />
 
-          {/* Main Viewport Container (Wide 1440px / max-w-7xl) */}
+          {/* Main Viewport Container */}
           <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
             <Routes>
               {/* Default Redirect to /home */}
               <Route path="/" element={<Navigate to="/home" replace />} />
 
-              {/* /home (Channel Directory) */}
+              {/* /home (Featured Match + Infinite-Scroll Channel Catalog) */}
               <Route path="/home" element={<HomePage />} />
 
-              {/* /watchroom & /watchroom/:channelId (Watch Theater) */}
+              {/* /watchroom & /watchroom/:channelId (Focused Watch Room) */}
               <Route path="/watchroom" element={<WatchRoomPage />} />
               <Route path="/watchroom/:channelId" element={<WatchRoomPage />} />
 
-              {/* /schedual (Live Fixtures) */}
+              {/* /schedual (Live & Multi-Day Match Schedule) */}
               <Route path="/schedual" element={<SchedulePage />} />
               <Route path="/schedule" element={<Navigate to="/schedual" replace />} />
 
-              {/* /favorit (User Favorites) */}
-              <Route path="/favorit" element={<FavoritesPage />} />
-              <Route path="/favorites" element={<Navigate to="/favorit" replace />} />
+              {/* /leagues (League Standings & Tournaments Hub) */}
+              <Route path="/leagues" element={<LeaguesPage />} />
 
-              {/* Essential Legal & Policy Pages */}
+              {/* Legal & Policy Pages */}
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/dmca" element={<DmcaPage />} />
@@ -61,7 +60,7 @@ export default function App() {
           {/* Persistent Floating Mini-Player Pill */}
           <MiniPlayerPill />
 
-          {/* Mobile Tactile Bottom Dock */}
+          {/* Mobile Bottom Navigation */}
           <BottomDock />
         </div>
       </AppProvider>

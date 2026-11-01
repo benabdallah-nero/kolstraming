@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Calendar,
@@ -7,44 +7,61 @@ import {
   RefreshCw,
   AlertCircle,
   Bell,
-  Grid,
-  Plus,
-  Check
+  Trophy,
+  BarChart3
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp, getApiUrl } from '../context/AppContext';
+import { LiveMatch, MatchDateKey } from '../types';
 import { Pagination } from '../components/Pagination';
+import { MatchDetailsModal } from '../components/MatchDetailsModal';
 import { usePageSeo } from '../hooks/usePageSeo';
 
 export const SchedulePage: React.FC = () => {
   usePageSeo({
-    title: 'جدول مباريات اليوم والقنوات الناقلة (beIN والأوروبية) – kolstream',
-    description: 'جدول مواعيد مباريات اليوم المباشرة في كافة البطولات العالمية مع القنوات الناقلة على beIN Sports والقنوات الأوروبية والعالمية على kolstream.',
-    canonicalPath: '/schedule'
+    title: 'جدول المباريات والنتائج المباشرة (الأمس واليوم والغد) – kolstream',
+    description:
+      'تابع نتائج ومواعيد مباريات الأمس واليوم والغد في الدوريات العربية والأوروبية مع التشكيلات والإحصائيات والقنوات الناقلة على kolstream.',
+    canonicalPath: '/schedual'
   });
+
   const {
-    matches,
-    loadingMatches,
+    matches: todayMatches,
+    loadingMatches: loadingTodayMatches,
     refreshMatches,
     setActiveStreamingChannel,
     channels,
     matchReminders,
     toggleMatchReminder,
-    isMatchReminderSet,
-    multiViewIds,
-    toggleMultiViewId,
-    setMultiViewIds
+    isMatchReminderSet
   } = useApp();
+
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
   // URL state
+  const rawDate = (searchParams.get('date') as MatchDateKey) || 'today';
   const rawPage = parseInt(searchParams.get('page') || '1', 10);
   const rawPageSize = parseInt(searchParams.get('pageSize') || '12', 10);
   const rawCategory = searchParams.get('category') || 'all';
   const rawSearch = searchParams.get('q') || '';
 
+  const [selectedDate, setSelectedDate] = useState<MatchDateKey>(
+    ['yesterday', 'today', 'tomorrow'].includes(rawDate) ? rawDate : 'today'
+  );
+  const [dateMatchesMap, setDateMatchesMap] = useState<Record<MatchDateKey, LiveMatch[]>>({
+    yesterday: [],
+    today: todayMatches,
+    tomorrow: []
+  });
+  const [loadingDateMatches, setLoadingDateMatches] = useState<boolean>(false);
   const [category, setCategory] = useState<string>(rawCategory);
   const [searchQuery, setSearchQuery] = useState<string>(rawSearch);
+  const [selectedMatchForDetails, setSelectedMatchForDetails] = useState<LiveMatch | null>(null);
+
+  // Sync todayMatches from AppContext
+  useEffect(() => {
+    setDateMatchesMap(prev => ({ ...prev, today: todayMatches }));
+  }, [todayMatches]);
 
   useEffect(() => {
     if (rawCategory !== category) setCategory(rawCategory);
@@ -54,12 +71,48 @@ export const SchedulePage: React.FC = () => {
     if (rawSearch !== searchQuery) setSearchQuery(rawSearch);
   }, [rawSearch, searchQuery]);
 
+  // Fetch matches for yesterday or tomorrow when selected
+  const fetchMatchesForDate = useCallback(
+    async (dateKey: MatchDateKey, force = false) => {
+      if (dateKey === 'today' && !force) return;
+      setLoadingDateMatches(true);
+      try {
+        const res = await fetch(getApiUrl(`/api/live-matches?date=${dateKey}`), {
+          headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(7000)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && Array.isArray(data.matches)) {
+            setDateMatchesMap(prev => ({ ...prev, [dateKey]: data.matches }));
+          }
+        }
+      } catch {
+        // Keep existing state
+      } finally {
+        setLoadingDateMatches(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (selectedDate !== 'today' && dateMatchesMap[selectedDate].length === 0) {
+      fetchMatchesForDate(selectedDate);
+    }
+  }, [selectedDate, dateMatchesMap, fetchMatchesForDate]);
+
+  const activeMatchesList =
+    selectedDate === 'today' ? todayMatches : dateMatchesMap[selectedDate] || [];
+  const isLoadingCurrentList =
+    selectedDate === 'today' ? loadingTodayMatches && todayMatches.length === 0 : loadingDateMatches;
+
   const currentPage = isNaN(rawPage) || rawPage < 1 ? 1 : rawPage;
   const pageSize = [6, 12, 24, 36].includes(rawPageSize) ? rawPageSize : 12;
 
   // Filter matches across all networks
   const filteredMatches = useMemo(() => {
-    let list = matches;
+    let list = activeMatchesList;
 
     if (category === 'live') {
       list = list.filter(m => m.status === 'LIVE');
@@ -83,7 +136,6 @@ export const SchedulePage: React.FC = () => {
       list = list.filter(m => matchReminders.includes(m.id));
     }
 
-    // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(
@@ -97,11 +149,10 @@ export const SchedulePage: React.FC = () => {
     }
 
     return list;
-  }, [matches, category, searchQuery, matchReminders]);
+  }, [activeMatchesList, category, searchQuery, matchReminders]);
 
   const totalPages = Math.ceil(filteredMatches.length / pageSize) || 1;
 
-  // Paginated slice
   const paginatedMatches = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredMatches.slice(start, start + pageSize);
@@ -109,20 +160,32 @@ export const SchedulePage: React.FC = () => {
 
   // Counts for filter chips
   const counts = useMemo(() => {
-    const live = matches.filter(m => m.status === 'LIVE').length;
-    const playable = matches.filter(m => m.channels && m.channels.length > 0).length;
-    const bein = matches.filter(
+    const live = activeMatchesList.filter(m => m.status === 'LIVE').length;
+    const playable = activeMatchesList.filter(m => m.channels && m.channels.length > 0).length;
+    const bein = activeMatchesList.filter(
       m =>
         m.isBeinArabic ||
         m.network === 'bein_ar' ||
         (m.channels && m.channels.some(c => c.channel_name.toLowerCase().includes('bein')))
     ).length;
-    const euro = matches.filter(
+    const euro = activeMatchesList.filter(
       m => m.channels && m.channels.length > 0 && m.channels.some(c => !c.isBeinArabic)
     ).length;
-    const reminders = matches.filter(m => matchReminders.includes(m.id)).length;
-    return { all: matches.length, live, playable, bein, euro, reminders };
-  }, [matches, matchReminders]);
+    const reminders = activeMatchesList.filter(m => matchReminders.includes(m.id)).length;
+    return { all: activeMatchesList.length, live, playable, bein, euro, reminders };
+  }, [activeMatchesList, matchReminders]);
+
+  const handleDateChange = (newDate: MatchDateKey) => {
+    setSelectedDate(newDate);
+    const next = new URLSearchParams(searchParams);
+    if (newDate !== 'today') {
+      next.set('date', newDate);
+    } else {
+      next.delete('date');
+    }
+    next.set('page', '1');
+    setSearchParams(next, { replace: true });
+  };
 
   const handleSearchChange = (val: string) => {
     setSearchQuery(val);
@@ -165,80 +228,93 @@ export const SchedulePage: React.FC = () => {
     navigate(`/watchroom/${channelId}`);
   };
 
-  // Launch top playable matches in Multi-View simultaneously
-  const handleWatchMultipleMatches = () => {
-    const playableChannelIds: number[] = [];
-    for (const m of filteredMatches) {
-      if (m.channels && m.channels.length > 0) {
-        const cid = Number(m.channels[0].channel_id);
-        if (!playableChannelIds.includes(cid)) {
-          playableChannelIds.push(cid);
-        }
-        if (playableChannelIds.length >= 4) break;
-      }
-    }
-    if (playableChannelIds.length > 0) {
-      setMultiViewIds(playableChannelIds);
-      navigate(`/watchroom/${playableChannelIds[0]}?multiview=1`);
-    }
-  };
-
   return (
     <div className="space-y-6 animate-in fade-in duration-200" dir="rtl">
-      {/* Header & Search */}
-      <div className="space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* Header, Date Switcher & Search */}
+      <div className="bg-[#101218] border border-stone-800/80 rounded-2xl p-4 sm:p-5 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-lg font-bold text-stone-100 flex items-center gap-2">
+            <h1 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
               <Calendar className="w-5 h-5 text-emerald-400" />
-              <span>جدول مباريات اليوم والقنوات الناقلة</span>
-              <span className="text-xs font-mono-num font-normal text-stone-400 bg-stone-900 border border-stone-800 px-2 py-0.5 rounded-md">
+              <span>جدول المباريات والنتائج المباشرة</span>
+              <span className="text-xs font-mono-num font-bold text-stone-400 bg-stone-900 border border-stone-800 px-2.5 py-0.5 rounded-lg">
                 {filteredMatches.length} مباراة
               </span>
             </h1>
-            <p className="text-xs text-stone-400 mt-0.5">
-              تغطية شاملة لمباريات اليوم مع إمكانية متابعة عدة مباريات في وقت واحد عبر الشاشة المتعددة
+            <p className="text-xs text-stone-400 mt-1">
+              اضغط على أي مباراة لعرض التشكيلة الرسمية، الأهداف، الإحصائيات، والقنوات الناقلة
             </p>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {counts.playable >= 2 && (
-              <button
-                type="button"
-                onClick={handleWatchMultipleMatches}
-                className="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold text-xs flex items-center gap-1.5 shadow-md transition cursor-pointer"
-                title="مشاهدة عدة مباريات في شاشة واحدة مقسمة"
-              >
-                <Grid className="w-3.5 h-3.5" />
-                <span>مشاهدة المباريات بشاشة متعددة</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => navigate('/leagues')}
+              className="px-3.5 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <Trophy className="w-3.5 h-3.5 text-purple-400" />
+              <span>ترتيب الدوريات</span>
+            </button>
 
-            <div className="relative flex-1 sm:w-64">
+            <div className="relative flex-1 sm:w-60">
               <Search className="w-4 h-4 text-stone-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={e => handleSearchChange(e.target.value)}
-                placeholder="ابحث عن فريق، بطولة، أو قناة..."
-                className="w-full bg-[#121316] border border-stone-800/80 rounded-xl pr-9 pl-4 py-2 text-xs text-stone-200 placeholder-stone-500 focus:outline-none focus:border-stone-600 transition"
+                placeholder="ابحث عن فريق أو بطولة..."
+                className="w-full bg-[#090b0f] border border-stone-800 rounded-xl pr-9 pl-4 py-2 text-xs text-stone-200 placeholder-stone-500 focus:outline-none focus:border-purple-500 transition"
               />
             </div>
 
             <button
               type="button"
-              onClick={() => refreshMatches()}
-              disabled={loadingMatches}
-              className="p-2 rounded-xl bg-stone-900 border border-stone-800 text-stone-400 hover:text-stone-200 transition shrink-0 cursor-pointer"
-              title="تحديث المباريات"
+              onClick={() => {
+                if (selectedDate === 'today') {
+                  refreshMatches();
+                } else {
+                  fetchMatchesForDate(selectedDate, true);
+                }
+              }}
+              disabled={isLoadingCurrentList}
+              className="p-2 rounded-xl bg-[#090b0f] border border-stone-800 text-stone-400 hover:text-stone-200 transition shrink-0 cursor-pointer"
+              title="تحديث النتائج"
             >
-              <RefreshCw className={`w-4 h-4 ${loadingMatches ? 'animate-spin text-emerald-400' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${isLoadingCurrentList ? 'animate-spin text-emerald-400' : ''}`} />
             </button>
           </div>
         </div>
 
+        {/* Date Tabs: Yesterday / Today / Tomorrow */}
+        <div className="grid grid-cols-3 gap-2 pt-1">
+          {([
+            { id: 'yesterday', label: 'مباريات الأمس', sub: 'النتائج الكاملة' },
+            { id: 'today', label: 'مباريات اليوم', sub: 'مباشر ومواعيد اليوم' },
+            { id: 'tomorrow', label: 'مباريات الغد', sub: 'المواجهات القادمة' }
+          ] as const).map(tab => {
+            const active = selectedDate === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => handleDateChange(tab.id)}
+                className={`py-2.5 px-3 rounded-xl border text-center transition cursor-pointer flex flex-col items-center justify-center ${
+                  active
+                    ? 'bg-emerald-500 text-stone-950 border-emerald-400 font-extrabold shadow-md'
+                    : 'bg-[#090b0f] border-stone-800 text-stone-300 hover:text-white'
+                }`}
+              >
+                <span className="text-xs sm:text-sm font-black">{tab.label}</span>
+                <span className={`text-[10px] ${active ? 'text-stone-900 font-bold' : 'text-stone-500'}`}>
+                  {tab.sub}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* Category Filter Chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs pt-2 border-t border-stone-800/60">
           {[
             { id: 'all', label: 'جميع المباريات', count: counts.all },
             { id: 'live', label: 'مباشر الآن', count: counts.live, isLive: true },
@@ -256,11 +332,11 @@ export const SchedulePage: React.FC = () => {
               className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition-all border shrink-0 flex items-center gap-1.5 font-medium cursor-pointer ${
                 category === tab.id
                   ? 'bg-stone-100 text-stone-950 border-stone-100 font-bold shadow-sm'
-                  : 'bg-[#121316] text-stone-400 hover:text-stone-200 border-stone-800/80 hover:border-stone-700'
+                  : 'bg-[#090b0f] text-stone-400 hover:text-stone-200 border-stone-800 hover:border-stone-700'
               }`}
             >
               {tab.isLive && counts.live > 0 && (
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
               )}
               <span>{tab.label}</span>
               <span className="text-[10px] font-mono-num opacity-60">({tab.count})</span>
@@ -269,18 +345,18 @@ export const SchedulePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Matches List */}
-      {loadingMatches && matches.length === 0 ? (
+      {/* Matches Grid */}
+      {isLoadingCurrentList ? (
         <div className="py-20 flex flex-col items-center justify-center text-stone-400 gap-3">
-          <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-xs">جاري تحميل جدول المباريات المباشرة...</span>
+          <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs">جاري تحميل جدول المباريات والنتائج...</span>
         </div>
       ) : filteredMatches.length === 0 ? (
-        <div className="py-16 text-center border border-dashed border-stone-800 rounded-2xl p-8 space-y-3">
+        <div className="py-16 text-center border border-dashed border-stone-800 rounded-2xl p-8 space-y-3 bg-[#101218]">
           <AlertCircle className="w-8 h-8 text-stone-500 mx-auto" />
           <div className="text-sm font-semibold text-stone-200">لا توجد مباريات مطابقة</div>
           <p className="text-xs text-stone-500 max-w-sm mx-auto">
-            لا توجد مباريات تطابق الفلتر أو كلمة البحث المحددة حالياً.
+            جرب تغيير التاريخ (الأمس / اليوم / الغد) أو عرض جميع البطولات.
           </p>
           <button
             type="button"
@@ -288,13 +364,13 @@ export const SchedulePage: React.FC = () => {
               handleSearchChange('');
               handleCategoryChange('all');
             }}
-            className="px-4 py-2 rounded-xl bg-stone-900 border border-stone-800 text-xs text-stone-300 hover:text-white transition"
+            className="px-4 py-2 rounded-xl bg-emerald-500 text-stone-950 font-extrabold text-xs transition cursor-pointer"
           >
             عرض كافة المباريات
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
           {paginatedMatches.map(match => {
             const isLive = match.status === 'LIVE';
             const hasScore = match.scoreA !== null && match.scoreB !== null;
@@ -303,37 +379,41 @@ export const SchedulePage: React.FC = () => {
             return (
               <div
                 key={match.id}
-                className={`bg-[#121316]/90 border rounded-2xl p-4 flex flex-col justify-between gap-3 transition-all shadow-sm ${
+                onClick={() => setSelectedMatchForDetails(match)}
+                className={`bg-[#101218] border rounded-2xl p-4 flex flex-col justify-between gap-3 transition-all shadow-sm cursor-pointer ${
                   isLive
-                    ? 'border-emerald-500/40 hover:border-emerald-500/70'
-                    : 'border-stone-800/80 hover:border-stone-700/80'
+                    ? 'border-emerald-500/40 hover:border-emerald-500/80'
+                    : 'border-stone-800/90 hover:border-stone-600'
                 }`}
               >
                 {/* Tournament, Status & Reminder Button */}
                 <div className="flex items-center justify-between gap-2 border-b border-stone-800/60 pb-2.5">
-                  <span className="text-xs font-semibold text-stone-300 truncate">
+                  <span className="text-xs font-bold text-stone-300 truncate">
                     {match.competition}
                   </span>
 
                   <div className="flex items-center gap-2 shrink-0">
                     {isLive ? (
                       <span className="flex items-center gap-1 text-[11px] font-mono-num font-bold text-rose-400 bg-rose-950/60 border border-rose-800/50 px-2 py-0.5 rounded-md animate-pulse">
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
                         <span>{match.minute || 'مباشر'}</span>
                       </span>
                     ) : match.status === 'RESULT' ? (
-                      <span className="text-[10px] text-stone-400 bg-stone-900 border border-stone-800 px-2 py-0.5 rounded-md">
+                      <span className="text-[10px] text-stone-300 bg-stone-900 border border-stone-800 px-2 py-0.5 rounded-md font-bold">
                         انتهت
                       </span>
                     ) : (
-                      <span className="text-[11px] font-mono-num text-stone-400 bg-stone-900 border border-stone-800 px-2 py-0.5 rounded-md">
+                      <span className="text-[11px] font-mono-num text-stone-300 bg-stone-900 border border-stone-800 px-2 py-0.5 rounded-md">
                         {match.time}
                       </span>
                     )}
 
                     <button
                       type="button"
-                      onClick={() => toggleMatchReminder(match.id)}
+                      onClick={e => {
+                        e.stopPropagation();
+                        toggleMatchReminder(match.id);
+                      }}
                       className={`p-1.5 rounded-lg border transition cursor-pointer ${
                         hasReminder
                           ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
@@ -347,108 +427,96 @@ export const SchedulePage: React.FC = () => {
                 </div>
 
                 {/* Teams & Score Display */}
-                <div className="flex items-center justify-between gap-4 py-1">
+                <div className="flex items-center justify-between gap-4 py-1.5">
                   {/* Team A */}
-                  <div className="flex-1 flex items-center gap-2 min-w-0">
+                  <div className="flex-1 flex items-center gap-2.5 min-w-0">
                     {match.teamA.logo ? (
                       <img
                         src={match.teamA.logo}
                         alt={match.teamA.name}
-                        className="w-7 h-7 object-contain shrink-0"
+                        className="w-8 h-8 object-contain shrink-0"
                         loading="lazy"
                       />
                     ) : (
-                      <div className="w-7 h-7 rounded-full bg-stone-850 flex items-center justify-center text-xs font-bold text-stone-400 shrink-0">
-                        {match.teamA.name.slice(0, 1)}
+                      <div className="w-8 h-8 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-center text-xs font-extrabold text-purple-300 shrink-0">
+                        {match.teamA.name.slice(0, 2)}
                       </div>
                     )}
-                    <span className="text-xs sm:text-sm font-bold text-stone-100 truncate">
+                    <span className="text-xs sm:text-sm font-extrabold text-white truncate">
                       {match.teamA.name}
                     </span>
                   </div>
 
                   {/* Score */}
-                  <div className="px-3 py-1 bg-stone-900 border border-stone-800 rounded-xl text-xs sm:text-sm font-mono-num font-extrabold text-stone-200 shrink-0 text-center min-w-[50px]">
+                  <div className="px-3.5 py-1.5 bg-[#090b0f] border border-stone-800 rounded-xl text-xs sm:text-base font-mono-num font-black text-stone-100 shrink-0 text-center min-w-[64px]">
                     {hasScore ? (
-                      <span className={isLive ? 'text-emerald-400' : 'text-stone-200'}>
+                      <span className={isLive ? 'text-emerald-400' : 'text-white'}>
                         {match.scoreA} - {match.scoreB}
                       </span>
                     ) : (
-                      <span className="text-[11px] text-stone-500 font-normal">vs</span>
+                      <span className="text-[11px] text-stone-400 font-bold">ضد</span>
                     )}
                   </div>
 
                   {/* Team B */}
-                  <div className="flex-1 flex items-center justify-end gap-2 min-w-0 text-left">
-                    <span className="text-xs sm:text-sm font-bold text-stone-100 truncate text-left">
+                  <div className="flex-1 flex items-center justify-end gap-2.5 min-w-0 text-left">
+                    <span className="text-xs sm:text-sm font-extrabold text-white truncate text-left">
                       {match.teamB.name}
                     </span>
                     {match.teamB.logo ? (
                       <img
                         src={match.teamB.logo}
                         alt={match.teamB.name}
-                        className="w-7 h-7 object-contain shrink-0"
+                        className="w-8 h-8 object-contain shrink-0"
                         loading="lazy"
                       />
                     ) : (
-                      <div className="w-7 h-7 rounded-full bg-stone-850 flex items-center justify-center text-xs font-bold text-stone-400 shrink-0">
-                        {match.teamB.name.slice(0, 1)}
+                      <div className="w-8 h-8 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-center text-xs font-extrabold text-purple-300 shrink-0">
+                        {match.teamB.name.slice(0, 2)}
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Footer Info: Broadcaster & Multi-Channel Tune-in Buttons */}
-                <div className="pt-2.5 border-t border-stone-800/60 flex flex-col gap-2 text-xs">
-                  {match.channels && match.channels.length > 0 ? (
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <span className="text-[11px] text-stone-400">
-                        القنوات الناقلة ({match.channels.length}):
-                      </span>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {match.channels.slice(0, 3).map((ch, idx) => (
-                          <button
-                            key={ch.channel_id}
-                            type="button"
-                            onClick={() => handleTuneIn(ch.channel_id, ch.channel_name)}
-                            className={`px-2.5 py-1 rounded-xl font-bold text-[11px] flex items-center gap-1 shadow-sm transition active:scale-95 shrink-0 cursor-pointer ${
-                              idx === 0
-                                ? 'bg-emerald-500 hover:bg-emerald-400 text-stone-950'
-                                : 'bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700'
-                            }`}
-                          >
-                            <Play className="w-2.5 h-2.5 fill-current" />
-                            <span>{ch.channel_name}</span>
-                          </button>
-                        ))}
+                {/* Footer Info: Match Details Trigger & Broadcaster Channels */}
+                <div className="pt-2.5 border-t border-stone-800/60 flex items-center justify-between gap-2 flex-wrap text-xs">
+                  <button
+                    type="button"
+                    onClick={e => {
+                      e.stopPropagation();
+                      setSelectedMatchForDetails(match);
+                    }}
+                    className="px-2.5 py-1 rounded-xl bg-stone-900 hover:bg-stone-800 border border-stone-800 text-stone-300 hover:text-white text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <BarChart3 className="w-3.5 h-3.5 text-purple-400" />
+                    <span>التشكيلة والإحصائيات</span>
+                  </button>
 
-                        {/* Add first match channel to Multi-View */}
-                        {(() => {
-                          const firstCid = Number(match.channels[0].channel_id);
-                          const inMulti = multiViewIds.includes(firstCid);
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => toggleMultiViewId(firstCid)}
-                              className={`px-2 py-1 rounded-xl border text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
-                                inMulti
-                                  ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
-                                  : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
-                              }`}
-                              title="إضافة للشاشة المتعددة"
-                            >
-                              {inMulti ? <Check className="w-2.5 h-2.5" /> : <Plus className="w-2.5 h-2.5" />}
-                              <span>شاشة متعددة</span>
-                            </button>
-                          );
-                        })()}
-                      </div>
+                  {match.channels && match.channels.length > 0 ? (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {match.channels.slice(0, 2).map((ch, idx) => (
+                        <button
+                          key={ch.channel_id}
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation();
+                            handleTuneIn(ch.channel_id, ch.channel_name);
+                          }}
+                          className={`px-2.5 py-1 rounded-xl font-bold text-[11px] flex items-center gap-1 shadow-sm transition active:scale-95 shrink-0 cursor-pointer ${
+                            idx === 0
+                              ? 'bg-emerald-500 hover:bg-emerald-400 text-stone-950'
+                              : 'bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700'
+                          }`}
+                        >
+                          <Play className="w-2.5 h-2.5 fill-current" />
+                          <span>{ch.channel_name}</span>
+                        </button>
+                      ))}
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between text-[11px] text-stone-500">
-                      <span>القناة: {match.broadcasterLabel || 'غير منقولة تلفزيونياً'}</span>
-                      <span className="italic">بدون بث فضائي مباشر</span>
-                    </div>
+                    <span className="text-[11px] text-stone-500">
+                      {match.broadcasterLabel || 'غير منقولة تلفزيونياً'}
+                    </span>
                   )}
                 </div>
               </div>
@@ -476,6 +544,13 @@ export const SchedulePage: React.FC = () => {
         }}
         pageSizeOptions={[6, 12, 24, 36]}
         itemLabel="مباراة"
+      />
+
+      {/* Match Details Modal (Lineups, Events, Stats & H2H) */}
+      <MatchDetailsModal
+        match={selectedMatchForDetails}
+        onClose={() => setSelectedMatchForDetails(null)}
+        onTuneIn={handleTuneIn}
       />
     </div>
   );

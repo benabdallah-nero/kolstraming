@@ -1,5 +1,14 @@
 import express, { type Request, type Response } from 'express';
 import zlib from 'zlib';
+import {
+  LEAGUES_CATALOG,
+  YALLAKORA_STANDING_PATHS,
+  ESPN_LEAGUE_SLUGS,
+  parseYallakoraStandingsHtml,
+  parseEspnStandingsToArabic,
+  translateTeamNameAr,
+  buildMatchDetailsForMatch
+} from '../src/utils/footballData.js';
 
 const app = express();
 
@@ -530,11 +539,50 @@ function translateCompetition(comp: string): string {
   return comp;
 }
 
-// API: Live Matches & Schedules (Integrated with BOTH Yallakora & DaddyLive All Soccer Events Catalog)
+// Helper to format date for Yallakora (MM/DD/YYYY) and ESPN (YYYYMMDD)
+function getTargetDateFormats(dateParam: string): {
+  dateKey: 'yesterday' | 'today' | 'tomorrow';
+  ykDate: string;
+  espnDate: string;
+} {
+  const now = new Date();
+  // Shift to Mecca time (UTC+3) so day boundaries match Arab viewers
+  const meccaNow = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+  let dateKey: 'yesterday' | 'today' | 'tomorrow' = 'today';
+  if (dateParam === 'yesterday') {
+    meccaNow.setUTCDate(meccaNow.getUTCDate() - 1);
+    dateKey = 'yesterday';
+  } else if (dateParam === 'tomorrow') {
+    meccaNow.setUTCDate(meccaNow.getUTCDate() + 1);
+    dateKey = 'tomorrow';
+  }
+  const yyyy = meccaNow.getUTCFullYear();
+  const mm = String(meccaNow.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(meccaNow.getUTCDate()).padStart(2, '0');
+  return {
+    dateKey,
+    ykDate: `${mm}/${dd}/${yyyy}`,
+    espnDate: `${yyyy}${mm}${dd}`
+  };
+}
+
+// Lookup maps for Yallakora and ESPN match metadata
+const yallakoraMatchMetaMap = new Map<
+  string,
+  { ykId: string; ykPath: string; teamA: string; teamB: string; competition: string }
+>();
+const espnEventLookupMap = new Map<string, string>();
+
+// API: Live Matches & Schedules (Supports ?date=yesterday|today|tomorrow)
 app.get('/api/live-matches', async (req: Request, res: Response) => {
-  const cachedMatches = getCached<any>('live_matches_realtime_v2', 20 * 1000);
+  const rawDate = String(req.query.date || 'today').toLowerCase();
+  const { dateKey, ykDate, espnDate } = getTargetDateFormats(rawDate);
+  const cacheKey = `live_matches_realtime_v4_${dateKey}`;
+  const cacheTtl = dateKey === 'today' ? 20 * 1000 : 120 * 1000;
+
+  const cachedMatches = getCached<any>(cacheKey, cacheTtl);
   if (cachedMatches) {
-    return res.json({ success: true, matches: cachedMatches });
+    return res.json({ success: true, date: dateKey, matches: cachedMatches });
   }
 
   const mapBroadcaster = (rawChannel: string | null) => {
@@ -605,12 +653,21 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
   };
 
   try {
-    const [ykRes, dliveCatalog] = await Promise.allSettled([
-      fetch('https://www.yallakora.com/matches-center', {
+    const ykUrl =
+      dateKey === 'today'
+        ? 'https://www.yallakora.com/matches-center'
+        : `https://www.yallakora.com/matches-center?date=${encodeURIComponent(ykDate)}`;
+
+    const [ykRes, dliveCatalog, espnRes] = await Promise.allSettled([
+      fetch(ykUrl, {
         headers: { 'User-Agent': UA, 'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8' },
-        signal: AbortSignal.timeout(3500)
+        signal: AbortSignal.timeout(4000)
       }),
-      fetchDliveSoccerCatalog()
+      dateKey === 'today' ? fetchDliveSoccerCatalog() : Promise.resolve({ events: [], discoveredChannels: [] }),
+      fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?dates=${espnDate}`, {
+        headers: { 'User-Agent': UA },
+        signal: AbortSignal.timeout(4000)
+      })
     ]);
 
     const dliveEvents = dliveCatalog.status === 'fulfilled' ? dliveCatalog.value.events : [];
@@ -643,9 +700,15 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
           continue;
         }
 
-        const items = card.split(/<div class="allData">/);
+        // Split by match item so we preserve livescorematchid="112619" and <a href=".../match/112619/...">
+        const items = card.split(/<div[^>]*livescorematchid=/i);
         for (let j = 1; j < items.length; j++) {
-          const item = items[j];
+          const item = 'livescorematchid=' + items[j];
+
+          const ykIdMatch = item.match(/livescorematchid=["'](\d+)["']/i) || item.match(/\/match\/(\d+)\//i);
+          const ykMatchId = ykIdMatch ? ykIdMatch[1] : null;
+          const ykHrefMatch = item.match(/href=["']([^"']*\/match\/\d+[^"']*)["']/i);
+          const ykMatchPath = ykHrefMatch ? ykHrefMatch[1].split('#')[0] : ykMatchId ? `/Match/?matchID=${ykMatchId}` : null;
 
           const teamAMatch = item.match(/class="teams teamA".*?<p>(.*?)<\/p>/s);
           const teamA = teamAMatch ? teamAMatch[1].trim() : null;
@@ -657,6 +720,16 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
 
           if (/إسرائيل|الكيان|مكابي|هابويل|هبوعيل|تل أبيب|بئر سبع|بيتار|سخنين|maccabi|hapoel/i.test(`${teamA} ${teamB}`)) {
             continue;
+          }
+
+          if (ykMatchId) {
+            yallakoraMatchMetaMap.set(ykMatchId, {
+              ykId: ykMatchId,
+              ykPath: ykMatchPath || '',
+              teamA,
+              teamB,
+              competition: tournament
+            });
           }
 
           const chMatch = item.match(/<div class="channel[^"]*">(.*?)<\/div>/);
@@ -718,7 +791,7 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
 
           matchIdx++;
           liveList.push({
-            id: `yk_${matchIdx}`,
+            id: ykMatchId ? `yk_${ykMatchId}` : `yk_${matchIdx}`,
             competition: tournament,
             teamA: { name: teamA, logo: logoA },
             teamB: { name: teamB, logo: logoB },
@@ -763,6 +836,70 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
       });
     }
 
+    // Parse ESPN scoreboard events to cache ESPN event IDs and enrich or add matches
+    if (espnRes.status === 'fulfilled' && espnRes.value.ok) {
+      try {
+        const espnJson = await espnRes.value.json();
+        const events = espnJson?.events || [];
+        for (const ev of events) {
+          const compObj = ev?.competitions?.[0];
+          const competitors = compObj?.competitors || [];
+          if (competitors.length < 2) continue;
+          const home = competitors.find((c: any) => c.homeAway === 'home') || competitors[0];
+          const away = competitors.find((c: any) => c.homeAway === 'away') || competitors[1];
+          const rawHome = home?.team?.displayName || home?.team?.name || '';
+          const rawAway = away?.team?.displayName || away?.team?.name || '';
+          if (!rawHome || !rawAway) continue;
+          if (/israel|maccabi|hapoel/i.test(`${rawHome} ${rawAway}`)) continue;
+
+          const teamAName = translateTeamNameAr(rawHome);
+          const teamBName = translateTeamNameAr(rawAway);
+          if (ev.id) {
+            espnEventLookupMap.set(`${teamAName}|${teamBName}`, String(ev.id));
+            espnEventLookupMap.set(`${rawHome.toLowerCase()}|${rawAway.toLowerCase()}`, String(ev.id));
+          }
+
+          if (liveList.length < 6) {
+            const state = ev?.status?.type?.state;
+            const status: 'LIVE' | 'FIXTURE' | 'RESULT' =
+              state === 'in' ? 'LIVE' : state === 'post' ? 'RESULT' : 'FIXTURE';
+            const scoreA = status !== 'FIXTURE' ? parseInt(home?.score || '0', 10) : null;
+            const scoreB = status !== 'FIXTURE' ? parseInt(away?.score || '0', 10) : null;
+
+            const evDate = ev?.date ? new Date(ev.date) : new Date();
+            const meccaH = (evDate.getUTCHours() + 3) % 24;
+            const meccaM = String(evDate.getUTCMinutes()).padStart(2, '0');
+            const timeStr = `${String(meccaH).padStart(2, '0')}:${meccaM}`;
+
+            const leagueName = translateCompetition(ev?.league?.name || compObj?.league?.name || 'بطولة كرة قدم عالمية');
+            const chNum = (matchIdx % 4) + 1;
+            const chId = 90 + chNum;
+
+            matchIdx++;
+            liveList.push({
+              id: `espn_${ev.id || matchIdx}`,
+              competition: leagueName,
+              teamA: { name: teamAName, logo: home?.team?.logo },
+              teamB: { name: teamBName, logo: away?.team?.logo },
+              scoreA,
+              scoreB,
+              status,
+              statusText: status === 'LIVE' ? 'مباشر' : status === 'RESULT' ? 'انتهت' : 'لم تبدأ',
+              minute: status === 'LIVE' ? (ev?.status?.displayClock || 'مباشر') : null,
+              time: `${timeStr} بتوقيت مكة`,
+              localTime: `${timeStr} بتوقيت مكة`,
+              channels: [{ channel_id: chId, channel_name: `beIN Sports ${chNum} HD`, quality: '1080p FHD', isBeinArabic: true }],
+              isBeinArabic: true,
+              broadcasterLabel: `beIN Sports ${chNum} HD`,
+              network: 'bein_ar'
+            });
+          }
+        }
+      } catch {
+        // ignore ESPN parse error
+      }
+    }
+
     liveList.sort((a, b) => {
       const order: Record<string, number> = { LIVE: 0, FIXTURE: 1, RESULT: 2 };
       const orderA = order[a.status] ?? 3;
@@ -773,11 +910,830 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
       return bHasBein - aHasBein;
     });
 
-    setCache('live_matches_realtime_v2', liveList);
-    return res.json({ success: true, matches: liveList });
+    setCache(cacheKey, liveList);
+    if (dateKey === 'today') {
+      setCache('live_matches_realtime_v2', liveList);
+    }
+    return res.json({ success: true, date: dateKey, matches: liveList });
   } catch (err: any) {
-    return res.json({ success: true, matches: [] });
+    return res.json({ success: true, date: dateKey, matches: [] });
   }
+});
+
+// API: League Standings (Live from Yallakora Arabic Standings & ESPN API — Zero Hardcoded Data)
+app.get('/api/standings', async (req: Request, res: Response) => {
+  const leagueId = String(req.query.league || 'epl').toLowerCase();
+  const baseLeagueInfo = LEAGUES_CATALOG.find(l => l.id === leagueId) || LEAGUES_CATALOG[0];
+  const cacheKey = `standings_live_v3_${baseLeagueInfo.id}`;
+  const cached = getCached<{ rows: any[]; season: string }>(cacheKey, 5 * 60 * 1000);
+  if (cached) {
+    return res.json({
+      success: true,
+      league: { ...baseLeagueInfo, season: cached.season },
+      leagues: LEAGUES_CATALOG,
+      standings: cached.rows
+    });
+  }
+
+  // 1. Primary live Arabic standings source: Yallakora (/standing/ and /group-standing/)
+  const ykPath = YALLAKORA_STANDING_PATHS[baseLeagueInfo.id];
+  if (ykPath) {
+    try {
+      const ykRes = await fetch(`https://www.yallakora.com${ykPath}`, {
+        headers: { 'User-Agent': UA },
+        signal: AbortSignal.timeout(5000)
+      });
+      if (ykRes.ok) {
+        const html = await ykRes.text();
+        const parsedYk = parseYallakoraStandingsHtml(html, baseLeagueInfo);
+        if (parsedYk && parsedYk.rows.length > 0) {
+          const liveSeason = parsedYk.season || baseLeagueInfo.season;
+          setCache(cacheKey, { rows: parsedYk.rows, season: liveSeason });
+          return res.json({
+            success: true,
+            league: { ...baseLeagueInfo, season: liveSeason },
+            leagues: LEAGUES_CATALOG,
+            standings: parsedYk.rows
+          });
+        }
+      }
+    } catch {
+      // Fallback to live ESPN standings API below
+    }
+  }
+
+  // 2. Secondary live source: ESPN Standings API
+  const espnSlug = ESPN_LEAGUE_SLUGS[baseLeagueInfo.id];
+  if (espnSlug) {
+    try {
+      const espnRes = await fetch(
+        `https://site.api.espn.com/apis/v2/sports/soccer/${espnSlug}/standings`,
+        {
+          headers: { 'User-Agent': UA },
+          signal: AbortSignal.timeout(5000)
+        }
+      );
+      if (espnRes.ok) {
+        const espnJson = await espnRes.json();
+        const parsed = parseEspnStandingsToArabic(espnJson, baseLeagueInfo);
+        if (parsed && parsed.length > 0) {
+          const espnSeasonMatch = String(
+            espnJson?.children?.[0]?.standings?.seasonDisplayName ||
+              espnJson?.seasons?.[0]?.displayName ||
+              ''
+          ).match(/(\d{4})[-/](\d{2,4})/);
+          const liveSeason = espnSeasonMatch
+            ? `${espnSeasonMatch[1]} / ${espnSeasonMatch[2].length === 2 ? espnSeasonMatch[1].slice(0, 2) + espnSeasonMatch[2] : espnSeasonMatch[2]}`
+            : baseLeagueInfo.season;
+
+          setCache(cacheKey, { rows: parsed, season: liveSeason });
+          return res.json({
+            success: true,
+            league: { ...baseLeagueInfo, season: liveSeason },
+            leagues: LEAGUES_CATALOG,
+            standings: parsed
+          });
+        }
+      }
+    } catch {
+      // ignore error
+    }
+  }
+
+  return res.json({
+    success: false,
+    league: baseLeagueInfo,
+    leagues: LEAGUES_CATALOG,
+    standings: []
+  });
+});
+
+function inferPositionFromFormation(idx: number, formation: string): 'GK' | 'DEF' | 'MID' | 'FWD' {
+  if (idx === 0) return 'GK';
+  const parts = formation.split('-').map(n => parseInt(n, 10)).filter(n => !isNaN(n));
+  const defCount = parts[0] || 4;
+  const fwdCount = parts.length > 1 ? parts[parts.length - 1] : 3;
+  if (idx <= defCount) return 'DEF';
+  if (idx >= 11 - fwdCount) return 'FWD';
+  return 'MID';
+}
+
+function mapArabicPosToCode(posAr: string): 'GK' | 'DEF' | 'MID' | 'FWD' {
+  if (posAr.includes('حارس')) return 'GK';
+  if (posAr.includes('مدافع') || posAr.includes('ظهير')) return 'DEF';
+  if (posAr.includes('مهاجم') || posAr.includes('جناح')) return 'FWD';
+  return 'MID';
+}
+
+function mapEspnPosToCode(posAbbr: string): 'GK' | 'DEF' | 'MID' | 'FWD' {
+  const u = (posAbbr || '').toUpperCase();
+  if (u === 'G' || u === 'GK') return 'GK';
+  if (u.includes('D') || u.includes('B')) return 'DEF';
+  if (u.includes('F') || u.includes('W') || u === 'ST' || u === 'CF') return 'FWD';
+  return 'MID';
+}
+
+async function fetchYallakoraTeamSquadFallback(teamUrlPath: string): Promise<{
+  startingXI: Array<{ number: number; name: string; position: 'GK' | 'DEF' | 'MID' | 'FWD' }>;
+  substitutes: Array<{ number: number; name: string; position: 'GK' | 'DEF' | 'MID' | 'FWD' }>;
+} | null> {
+  try {
+    const squadPath = teamUrlPath.replace('/team/', '/team-squad/');
+    const res = await fetch(`https://www.yallakora.com${squadPath}`, {
+      headers: { 'User-Agent': UA },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const matches = [
+      ...html.matchAll(
+        /<div class="playerInfo">\s*<p class="shirt">(.*?)<\/p>\s*<p class="name">(.*?)<\/p>\s*<p class="position">(.*?)<\/p>/gs
+      )
+    ];
+    if (matches.length === 0) return null;
+
+    const allPlayers = matches.map((m, idx) => ({
+      number: parseInt(m[1].trim(), 10) || idx + 1,
+      name: m[2].replace(/<[^>]+>/g, '').trim(),
+      position: mapArabicPosToCode(m[3].trim())
+    })).filter(p => p.name.length > 1);
+
+    const gks = allPlayers.filter(p => p.position === 'GK');
+    const defs = allPlayers.filter(p => p.position === 'DEF');
+    const mids = allPlayers.filter(p => p.position === 'MID');
+    const fwds = allPlayers.filter(p => p.position === 'FWD');
+
+    const startingXI = [
+      ...gks.slice(0, 1),
+      ...defs.slice(0, 4),
+      ...mids.slice(0, 3),
+      ...fwds.slice(0, 3)
+    ];
+    const usedNames = new Set(startingXI.map(p => p.name));
+    for (const p of allPlayers) {
+      if (startingXI.length >= 11) break;
+      if (!usedNames.has(p.name)) {
+        startingXI.push(p);
+        usedNames.add(p.name);
+      }
+    }
+
+    const substitutes = allPlayers.filter(p => !usedNames.has(p.name)).slice(0, 9);
+    return { startingXI, substitutes };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchYallakoraRealMatchDetails(ykId: string, ykPath?: string) {
+  const postHeaders = {
+    'User-Agent': UA,
+    'Content-Type': 'application/json; charset=utf-8',
+    'X-Requested-With': 'XMLHttpRequest',
+    'Referer': 'https://www.yallakora.com/'
+  };
+
+  const pageUrl = ykPath && ykPath.startsWith('/')
+    ? `https://www.yallakora.com${ykPath}`
+    : `https://www.yallakora.com/Match/?matchID=${ykId}`;
+
+  const [sqRes, stRes, h2hRes, pageRes, minPage2Res] = await Promise.allSettled([
+    fetch(`https://www.yallakora.com/Match/Matchsquad2?matchID=${ykId}`, {
+      method: 'POST',
+      headers: postHeaders,
+      signal: AbortSignal.timeout(4500)
+    }),
+    fetch(`https://www.yallakora.com/Match/EuroMatchStats2?matchID=${ykId}`, {
+      method: 'POST',
+      headers: postHeaders,
+      signal: AbortSignal.timeout(4500)
+    }),
+    fetch(`https://www.yallakora.com/Match/GetTeamsHeadToHeadMatches?matchID=${ykId}`, {
+      method: 'POST',
+      headers: postHeaders,
+      signal: AbortSignal.timeout(4500)
+    }),
+    fetch(pageUrl, {
+      headers: { 'User-Agent': UA },
+      signal: AbortSignal.timeout(4500)
+    }),
+    fetch(`https://www.yallakora.com/match/MatchMinByMinPaging?matchId=${ykId}&PageIndex=2&PageSize=30`, {
+      headers: {
+        'User-Agent': UA,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': pageUrl
+      },
+      signal: AbortSignal.timeout(4500)
+    })
+  ]);
+
+  let formationA = '4-3-3';
+  let formationB = '4-3-3';
+  let startingA: Array<{ number: number; name: string; position: 'GK' | 'DEF' | 'MID' | 'FWD' }> = [];
+  let startingB: Array<{ number: number; name: string; position: 'GK' | 'DEF' | 'MID' | 'FWD' }> = [];
+  let subsA: Array<{ number: number; name: string; position: 'GK' | 'DEF' | 'MID' | 'FWD' }> = [];
+  let subsB: Array<{ number: number; name: string; position: 'GK' | 'DEF' | 'MID' | 'FWD' }> = [];
+
+  if (sqRes.status === 'fulfilled' && sqRes.value.ok) {
+    const sqHtml = await sqRes.value.text();
+
+    const formMatches = [...sqHtml.matchAll(/<div class="formName">\s*<span>(.*?)<\/span>/gs)];
+    if (formMatches[0]?.[1]) formationA = formMatches[0][1].trim();
+    if (formMatches[1]?.[1]) formationB = formMatches[1][1].trim();
+
+    const parseSquadBlock = (blockHtml: string, form: string, isSub: boolean) => {
+      const players: Array<{ number: number; name: string; position: 'GK' | 'DEF' | 'MID' | 'FWD' }> = [];
+      const rx = /<div class="playerNum">\s*([0-9]+)\s*<\/div>\s*<p class="playerName">\s*(.*?)\s*<\/p>/gs;
+      let m: RegExpExecArray | null;
+      let idx = 0;
+      while ((m = rx.exec(blockHtml)) !== null) {
+        const num = parseInt(m[1], 10) || idx + 1;
+        const name = m[2].replace(/<[^>]+>/g, '').trim();
+        if (name) {
+          players.push({
+            number: num,
+            name,
+            position: isSub
+              ? idx === 0
+                ? 'GK'
+                : idx <= 3
+                ? 'DEF'
+                : idx <= 6
+                ? 'MID'
+                : 'FWD'
+              : inferPositionFromFormation(idx, form)
+          });
+          idx++;
+        }
+      }
+      return players;
+    };
+
+    const mainIdx = sqHtml.indexOf('teamSquad Main');
+    const subIdx = sqHtml.indexOf('teamSquad Sub');
+    if (mainIdx !== -1) {
+      const mainSection = subIdx !== -1 ? sqHtml.slice(mainIdx, subIdx) : sqHtml.slice(mainIdx);
+      const teamBMainIdx = mainSection.indexOf('<div class="teamB">');
+      if (teamBMainIdx !== -1) {
+        startingA = parseSquadBlock(mainSection.slice(0, teamBMainIdx), formationA, false);
+        startingB = parseSquadBlock(mainSection.slice(teamBMainIdx), formationB, false);
+      }
+    }
+
+    if (subIdx !== -1) {
+      const subSection = sqHtml.slice(subIdx);
+      const teamBSubIdx = subSection.indexOf('<div class="teamB">');
+      if (teamBSubIdx !== -1) {
+        subsA = parseSquadBlock(subSection.slice(0, teamBSubIdx), formationA, true);
+        subsB = parseSquadBlock(subSection.slice(teamBSubIdx), formationB, true);
+      }
+    }
+
+    // If official match starting XI is not announced yet, fetch both teams' real Arabic squad from Yallakora team-squad page!
+    if (startingA.length === 0 || startingB.length === 0) {
+      const teamLinks = [...sqHtml.matchAll(/href=["']([^"']*\/team\/\d+\/[^"']+)["']/gi)].map(m => m[1]);
+      const uniqueTeamLinks = [...new Set(teamLinks)];
+      if (uniqueTeamLinks.length >= 2) {
+        const [fbA, fbB] = await Promise.all([
+          startingA.length === 0 ? fetchYallakoraTeamSquadFallback(uniqueTeamLinks[0]) : Promise.resolve(null),
+          startingB.length === 0 ? fetchYallakoraTeamSquadFallback(uniqueTeamLinks[1]) : Promise.resolve(null)
+        ]);
+        if (fbA) {
+          startingA = fbA.startingXI;
+          subsA = fbA.substitutes;
+        }
+        if (fbB) {
+          startingB = fbB.startingXI;
+          subsB = fbB.substitutes;
+        }
+      }
+    }
+  }
+
+  // Parse real match events from Yallakora match page (both timeline events AND live minUl feed)
+  const events: Array<{
+    id: string;
+    minute: string;
+    team: 'A' | 'B';
+    type: 'goal' | 'penalty_goal' | 'yellow_card' | 'red_card' | 'sub';
+    player: string;
+    assistOrSubOut?: string;
+    detail?: string;
+  }> = [];
+
+  const parseMinValue = (minStr: string): number => {
+    const clean = minStr.replace(/[^0-9+]/g, '');
+    if (clean.includes('+')) {
+      const [base, extra] = clean.split('+');
+      return (parseInt(base, 10) || 0) + (parseInt(extra, 10) || 0) * 0.1;
+    }
+    return parseInt(clean, 10) || 0;
+  };
+
+  if (pageRes.status === 'fulfilled' && pageRes.value.ok) {
+    const pageHtml = await pageRes.value.text();
+    const minPage2Html =
+      minPage2Res.status === 'fulfilled' && minPage2Res.value.ok
+        ? await minPage2Res.value.text()
+        : '';
+
+    let evIdx = 0;
+
+    // 1. Parse summary timeline events section
+    const evStart = pageHtml.indexOf('timeline events');
+    if (evStart !== -1) {
+      const minByMinPos = pageHtml.indexOf('minbymin', evStart);
+      const evHtml = pageHtml.slice(evStart, minByMinPos !== -1 ? minByMinPos : evStart + 18000);
+      const liMatches = [...evHtml.matchAll(/<li class="([^"]+)">([\s\S]*?)<\/li>/g)];
+      for (const li of liMatches) {
+        const cls = li[1];
+        const inner = li[2];
+        if (cls.includes('referee') || cls.includes('websites')) continue;
+        const minMatch = inner.match(/<div class="min">(.*?)<\/div>/s);
+        const minRaw = minMatch ? minMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+        if (!minRaw || minRaw === '0') continue;
+
+        const team: 'A' | 'B' = cls.includes('right') ? 'A' : 'B';
+        const minute = minRaw.includes("'") ? minRaw : `${minRaw}'`;
+
+        if (cls.includes('sub')) {
+          const subIn = inner.match(/<span class="subIn">(.*?)<\/span>/s)?.[1]?.replace(/<[^>]+>/g, '').trim() || '';
+          const subOut = inner.match(/<span class="subOut">(.*?)<\/span>/s)?.[1]?.replace(/<[^>]+>/g, '').trim() || '';
+          if (subIn) {
+            evIdx++;
+            events.push({
+              id: `yk_ev_${evIdx}`,
+              minute,
+              team,
+              type: 'sub',
+              player: subIn,
+              assistOrSubOut: subOut ? `خروج: ${subOut}` : undefined
+            });
+          }
+        } else if (cls.includes('goal') || cls.includes('penIn')) {
+          const assist = inner.match(/<span class="assister">(.*?)<\/span>/s)?.[1]?.replace(/[()]/g, '').trim();
+          const descClean = inner
+            .replace(/<div class="min">[\s\S]*?<\/div>/g, '')
+            .replace(/<span class="assister">[\s\S]*?<\/span>/g, '')
+            .replace(/<[^>]+>/g, '')
+            .trim();
+          if (descClean) {
+            evIdx++;
+            events.push({
+              id: `yk_ev_${evIdx}`,
+              minute,
+              team,
+              type: cls.includes('pen') ? 'penalty_goal' : 'goal',
+              player: descClean,
+              assistOrSubOut: assist ? `تمريرة حاسمة: ${assist}` : cls.includes('pen') ? 'ركلة جزاء' : undefined
+            });
+          }
+        } else if (cls.includes('yellowCard') || cls.includes('redCard')) {
+          const playerClean = inner
+            .replace(/<div class="min">[\s\S]*?<\/div>/g, '')
+            .replace(/<[^>]+>/g, '')
+            .trim();
+          if (playerClean) {
+            evIdx++;
+            events.push({
+              id: `yk_ev_${evIdx}`,
+              minute,
+              team,
+              type: cls.includes('redCard') ? 'red_card' : 'yellow_card',
+              player: playerClean
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Also parse live minute-by-minute (<ul id="minUl"> + Page 2) where live yellow/red cards and subs appear immediately
+    const combinedMinHtml = `${pageHtml}\n${minPage2Html}`;
+    const minLiMatches = [
+      ...combinedMinHtml.matchAll(/<li\s+id="id_\d+"[^>]*class="([^"]*)"[^>]*>([\s\S]*?)<\/li>/g)
+    ];
+
+    for (const m of minLiMatches) {
+      const cls = m[1];
+      const inner = m[2];
+      if (!/yellowCard|redCard|sub|goal|penIn/i.test(cls)) continue;
+
+      const minRaw = inner.match(/<div class="minNumber">\s*(.*?)\s*<\/div>/s)?.[1]?.trim() || '';
+      if (!minRaw || minRaw === '0') continue;
+
+      const minute = minRaw.includes("'") ? minRaw : `${minRaw}'`;
+      const minNum = parseMinValue(minRaw);
+      const team: 'A' | 'B' = /TeamA/i.test(cls) ? 'A' : 'B';
+
+      if (/yellowCard|redCard/i.test(cls)) {
+        const type = /redCard/i.test(cls) ? 'red_card' : 'yellow_card';
+        const desc =
+          inner
+            .match(/<p class="description">([\s\S]*?)<\/p>/i)?.[1]
+            ?.replace(/<[^>]+>/g, '')
+            .replace(/\s+/g, ' ')
+            .trim() || '';
+        if (!desc) continue;
+
+        // Extract player name from Arabic card description (e.g. "انذار لـ برادلي باركولا لاعب ليفربول")
+        const extractedPlayer =
+          desc.match(/(?:انذار|إنذار|بطاقة صفراء|بطاقة حمراء|طرد)\s+(?:لـ\s*|ل)?(.*?)(?:\s+لاعب\s+.*|$)/)?.[1]?.trim() ||
+          desc;
+
+        const alreadyExists = events.some(
+          e =>
+            e.type === type &&
+            e.team === team &&
+            (Math.abs(parseMinValue(e.minute) - minNum) <= 1.5 ||
+              e.player.includes(extractedPlayer) ||
+              extractedPlayer.includes(e.player))
+        );
+
+        if (!alreadyExists) {
+          evIdx++;
+          events.push({
+            id: `yk_min_ev_${evIdx}`,
+            minute,
+            team,
+            type,
+            player: extractedPlayer,
+            assistOrSubOut: extractedPlayer !== desc ? desc : undefined
+          });
+        }
+      } else if (/\bsub\b/i.test(cls)) {
+        const subIn =
+          inner
+            .match(/<p class="subIn"><\/p>\s*<a[^>]*>([\s\S]*?)<\/a>/i)?.[1]
+            ?.replace(/<[^>]+>/g, '')
+            .trim() || '';
+        const subOut =
+          inner
+            .match(/<p class="subOut"><\/p>\s*<a[^>]*>([\s\S]*?)<\/a>/i)?.[1]
+            ?.replace(/<[^>]+>/g, '')
+            .trim() || '';
+        if (!subIn) continue;
+
+        const alreadyExists = events.some(
+          e =>
+            e.type === 'sub' &&
+            e.team === team &&
+            (e.player === subIn || Math.abs(parseMinValue(e.minute) - minNum) <= 1)
+        );
+        if (!alreadyExists) {
+          evIdx++;
+          events.push({
+            id: `yk_min_ev_${evIdx}`,
+            minute,
+            team,
+            type: 'sub',
+            player: subIn,
+            assistOrSubOut: subOut ? `خروج: ${subOut}` : undefined
+          });
+        }
+      } else if (/goal|penIn/i.test(cls)) {
+        const scorer =
+          inner
+            .match(/<div class="name">\s*<p><\/p>\s*<a[^>]*>([\s\S]*?)<\/a>/i)?.[1]
+            ?.replace(/<[^>]+>/g, '')
+            .trim() || '';
+        if (!scorer) continue;
+
+        const alreadyExists = events.some(
+          e =>
+            (e.type === 'goal' || e.type === 'penalty_goal') &&
+            e.team === team &&
+            (e.player.includes(scorer) ||
+              scorer.includes(e.player) ||
+              Math.abs(parseMinValue(e.minute) - minNum) <= 1.5)
+        );
+        if (!alreadyExists) {
+          evIdx++;
+          events.push({
+            id: `yk_min_ev_${evIdx}`,
+            minute,
+            team,
+            type: /pen/i.test(cls) ? 'penalty_goal' : 'goal',
+            player: scorer
+          });
+        }
+      }
+    }
+
+    // Sort events chronologically by minute
+    events.sort((a, b) => parseMinValue(a.minute) - parseMinValue(b.minute));
+  }
+
+  // Parse real match statistics from EuroMatchStats2
+  const stats: Array<{
+    label: string;
+    valueA: string | number;
+    valueB: string | number;
+    percentA: number;
+    percentB: number;
+  }> = [];
+
+  if (stRes.status === 'fulfilled' && stRes.value.ok) {
+    const stHtml = await stRes.value.text();
+    const statItems = [
+      ...stHtml.matchAll(
+        /<li>\s*<div class="team teamA">\s*([0-9.%]+)\s*<\/div>\s*<div class="desc">\s*(.*?)\s*<\/div>\s*<div class="team teamB">\s*([0-9.%]+)\s*<\/div>\s*<\/li>/gs
+      )
+    ];
+    for (const st of statItems) {
+      const valA = parseFloat(st[1]) || 0;
+      const label = st[2].replace(/<[^>]+>/g, '').trim();
+      const valB = parseFloat(st[3]) || 0;
+      const total = valA + valB;
+      stats.push({
+        label,
+        valueA: st[1].trim(),
+        valueB: st[3].trim(),
+        percentA: total > 0 ? Math.round((valA / total) * 100) : 50,
+        percentB: total > 0 ? Math.round((valB / total) * 100) : 50
+      });
+    }
+  }
+
+  // Parse real H2H matches from GetTeamsHeadToHeadMatches
+  const h2h: Array<{
+    date: string;
+    competition: string;
+    teamA: string;
+    teamB: string;
+    scoreA: number;
+    scoreB: number;
+  }> = [];
+
+  if (h2hRes.status === 'fulfilled' && h2hRes.value.ok) {
+    const h2hHtml = await h2hRes.value.text();
+    const blocks = h2hHtml.split(/<div class="matchDtls">/);
+    for (let i = 1; i < blocks.length && h2h.length < 6; i++) {
+      const b = blocks[i];
+      const dateStr = b.match(/<p class="day">\s*(.*?)\s*<\/p>/s)?.[1]?.trim() || '';
+      const t1Score = b.match(/class="teamresult team1">\s*<span>([0-9]+)<\/span>/s)?.[1];
+      const t1Name = b.match(/class="teamresult team1">[\s\S]*?<div class="teamName">\s*(.*?)\s*<\/div>/s)?.[1]?.trim();
+      const t2Score = b.match(/class="teamresult team2">\s*<span>([0-9]+)<\/span>/s)?.[1];
+      const t2Name = b.match(/class="teamresult team2">[\s\S]*?<div class="teamName">\s*(.*?)\s*<\/div>/s)?.[1]?.trim();
+      if (t1Name && t2Name && t1Score !== undefined && t2Score !== undefined) {
+        h2h.push({
+          date: dateStr,
+          competition: 'مواجهة سابقة',
+          teamA: t1Name,
+          teamB: t2Name,
+          scoreA: parseInt(t1Score, 10) || 0,
+          scoreB: parseInt(t2Score, 10) || 0
+        });
+      }
+    }
+  }
+
+  return {
+    lineupA: { formation: formationA, coach: 'المدير الفني', startingXI: startingA, substitutes: subsA },
+    lineupB: { formation: formationB, coach: 'المدير الفني', startingXI: startingB, substitutes: subsB },
+    events,
+    stats,
+    h2h
+  };
+}
+
+async function fetchEspnRealMatchDetails(espnEventId: string) {
+  try {
+    const res = await fetch(
+      `https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${encodeURIComponent(espnEventId)}`,
+      {
+        headers: { 'User-Agent': UA },
+        signal: AbortSignal.timeout(4500)
+      }
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+
+    const rosters = json?.rosters || [];
+    const homeRoster = rosters.find((r: any) => r.homeAway === 'home') || rosters[0];
+    const awayRoster = rosters.find((r: any) => r.homeAway === 'away') || rosters[1];
+
+    const parseEspnRoster = (rObj: any) => {
+      const formation = rObj?.formation || '4-3-3';
+      const list = Array.isArray(rObj?.roster) ? rObj.roster : [];
+      const startingXI = list
+        .filter((p: any) => p.starter)
+        .map((p: any, idx: number) => ({
+          number: parseInt(p.jersey || String(idx + 1), 10) || idx + 1,
+          name: p.athlete?.displayName || p.athlete?.fullName || '',
+          position: mapEspnPosToCode(p.position?.abbreviation || ''),
+          isCaptain: !!p.captain
+        }))
+        .filter((p: any) => p.name);
+
+      const substitutes = list
+        .filter((p: any) => !p.starter)
+        .map((p: any, idx: number) => ({
+          number: parseInt(p.jersey || String(idx + 12), 10) || idx + 12,
+          name: p.athlete?.displayName || p.athlete?.fullName || '',
+          position: mapEspnPosToCode(p.position?.abbreviation || '')
+        }))
+        .filter((p: any) => p.name);
+
+      return { formation, coach: 'المدير الفني', startingXI, substitutes };
+    };
+
+    const homeTeamName = homeRoster?.team?.displayName || '';
+    const events: Array<{
+      id: string;
+      minute: string;
+      team: 'A' | 'B';
+      type: 'goal' | 'penalty_goal' | 'yellow_card' | 'red_card' | 'sub';
+      player: string;
+      assistOrSubOut?: string;
+    }> = [];
+
+    const keyEvents = json?.keyEvents || [];
+    keyEvents.forEach((ke: any, idx: number) => {
+      const tCode = String(ke?.type?.type || ke?.type?.text || '').toLowerCase();
+      const clock = ke?.clock?.displayValue || '';
+      if (!clock) return;
+      const isHome = ke?.team?.displayName === homeTeamName;
+      const team: 'A' | 'B' = isHome ? 'A' : 'B';
+      const p1 = ke?.participants?.[0]?.athlete?.displayName || '';
+      const p2 = ke?.participants?.[1]?.athlete?.displayName || '';
+
+      if (tCode.includes('goal') || ke?.scoringPlay) {
+        events.push({
+          id: `espn_ev_${idx}`,
+          minute: clock,
+          team,
+          type: tCode.includes('penalty') ? 'penalty_goal' : 'goal',
+          player: p1 || ke?.text || 'هدف',
+          assistOrSubOut: p2 ? `تمريرة حاسمة: ${p2}` : undefined
+        });
+      } else if (tCode.includes('yellow')) {
+        if (p1) {
+          events.push({ id: `espn_ev_${idx}`, minute: clock, team, type: 'yellow_card', player: p1 });
+        }
+      } else if (tCode.includes('red')) {
+        if (p1) {
+          events.push({ id: `espn_ev_${idx}`, minute: clock, team, type: 'red_card', player: p1 });
+        }
+      } else if (tCode.includes('sub')) {
+        if (p1) {
+          events.push({
+            id: `espn_ev_${idx}`,
+            minute: clock,
+            team,
+            type: 'sub',
+            player: p1,
+            assistOrSubOut: p2 ? `خروج: ${p2}` : undefined
+          });
+        }
+      }
+    });
+
+    const stats: Array<{
+      label: string;
+      valueA: string | number;
+      valueB: string | number;
+      percentA: number;
+      percentB: number;
+    }> = [];
+
+    const boxTeams = json?.boxscore?.teams || [];
+    if (boxTeams.length >= 2) {
+      const getStat = (tIdx: number, name: string) =>
+        boxTeams[tIdx]?.statistics?.find((s: any) => s.name === name)?.displayValue;
+
+      const statDefs: Array<[string, string]> = [
+        ['possessionPct', 'الاستحواذ على الكرة (%)'],
+        ['totalShots', 'إجمالي التسديدات'],
+        ['shotsOnTarget', 'التسديدات على المرمى'],
+        ['wonCorners', 'الضربات الركنية'],
+        ['foulsCommitted', 'الأخطاء المرتكبة'],
+        ['offsides', 'التسلل'],
+        ['saves', 'تصديات الحارس']
+      ];
+
+      for (const [key, label] of statDefs) {
+        const vA = getStat(0, key);
+        const vB = getStat(1, key);
+        if (vA !== undefined && vB !== undefined) {
+          const nA = parseFloat(vA) || 0;
+          const nB = parseFloat(vB) || 0;
+          const tot = nA + nB;
+          stats.push({
+            label,
+            valueA: key === 'possessionPct' ? `${vA}%` : vA,
+            valueB: key === 'possessionPct' ? `${vB}%` : vB,
+            percentA: tot > 0 ? Math.round((nA / tot) * 100) : 50,
+            percentB: tot > 0 ? Math.round((nB / tot) * 100) : 50
+          });
+        }
+      }
+    }
+
+    return {
+      stadium: json?.gameInfo?.venue?.fullName || '',
+      lineupA: parseEspnRoster(homeRoster),
+      lineupB: parseEspnRoster(awayRoster),
+      events,
+      stats
+    };
+  } catch {
+    return null;
+  }
+}
+
+// API: Match Details (Real Live Events, Starting Lineups, Substitutes, Statistics & Head-to-Head)
+app.get('/api/match-details/:id', async (req: Request, res: Response) => {
+  const matchId = String(req.params.id || 'match_1');
+  const teamAName = String(req.query.teamA || 'الفريق الأول');
+  const teamBName = String(req.query.teamB || 'الفريق الثاني');
+  const competition = String(req.query.competition || 'بطولة كرة القدم');
+  const status = (String(req.query.status || 'FIXTURE') as 'LIVE' | 'FIXTURE' | 'RESULT');
+  const scoreA = req.query.scoreA !== undefined && req.query.scoreA !== '' ? Number(req.query.scoreA) : null;
+  const scoreB = req.query.scoreB !== undefined && req.query.scoreB !== '' ? Number(req.query.scoreB) : null;
+
+  const cacheKey = `real_match_details_${matchId}_${teamAName}_${teamBName}`;
+  const cached = getCached<any>(cacheKey, 25 * 1000);
+  if (cached) {
+    return res.json({ success: true, details: cached });
+  }
+
+  const baseDetails = buildMatchDetailsForMatch({
+    id: matchId,
+    competition,
+    teamA: { name: teamAName },
+    teamB: { name: teamBName },
+    scoreA: scoreA !== null && !isNaN(scoreA) ? scoreA : null,
+    scoreB: scoreB !== null && !isNaN(scoreB) ? scoreB : null,
+    status,
+    time: '21:00',
+    channels: [],
+    isBeinArabic: true,
+    broadcasterLabel: '',
+    network: 'bein_ar'
+  });
+
+  // 1. Check if we have a real Yallakora match ID
+  let ykId: string | null = null;
+  let ykPath: string | undefined;
+  const ykDirectMatch = matchId.match(/^yk_(\d+)$/);
+  if (ykDirectMatch && parseInt(ykDirectMatch[1], 10) > 1000) {
+    ykId = ykDirectMatch[1];
+    ykPath = yallakoraMatchMetaMap.get(ykId)?.ykPath;
+  } else {
+    for (const meta of yallakoraMatchMetaMap.values()) {
+      if (
+        (meta.teamA.includes(teamAName) || teamAName.includes(meta.teamA)) &&
+        (meta.teamB.includes(teamBName) || teamBName.includes(meta.teamB))
+      ) {
+        ykId = meta.ykId;
+        ykPath = meta.ykPath;
+        break;
+      }
+    }
+  }
+
+  // 2. Check if we have a real ESPN event ID
+  let espnId: string | null = null;
+  if (matchId.startsWith('espn_')) {
+    espnId = matchId.replace('espn_', '');
+  } else {
+    espnId = espnEventLookupMap.get(`${teamAName}|${teamBName}`) || null;
+  }
+
+  const [ykData, espnData] = await Promise.all([
+    ykId ? fetchYallakoraRealMatchDetails(ykId, ykPath) : Promise.resolve(null),
+    espnId ? fetchEspnRealMatchDetails(espnId) : Promise.resolve(null)
+  ]);
+
+  if (ykData) {
+    if (ykData.lineupA.startingXI.length > 0) baseDetails.lineupA = ykData.lineupA;
+    if (ykData.lineupB.startingXI.length > 0) baseDetails.lineupB = ykData.lineupB;
+    if (ykData.events.length > 0) baseDetails.events = ykData.events;
+    if (ykData.stats.length > 0) baseDetails.stats = ykData.stats;
+    if (ykData.h2h.length > 0) baseDetails.h2h = ykData.h2h;
+  }
+
+  if (espnData) {
+    if (espnData.stadium) baseDetails.stadium = espnData.stadium;
+    if (baseDetails.lineupA.startingXI.length === 0 && espnData.lineupA.startingXI.length > 0) {
+      baseDetails.lineupA = espnData.lineupA;
+    }
+    if (baseDetails.lineupB.startingXI.length === 0 && espnData.lineupB.startingXI.length > 0) {
+      baseDetails.lineupB = espnData.lineupB;
+    }
+    if (baseDetails.events.length === 0 && espnData.events.length > 0) {
+      baseDetails.events = espnData.events;
+    }
+    if (espnData.stats.length > 0) {
+      baseDetails.stats = espnData.stats;
+    }
+  }
+
+  setCache(cacheKey, baseDetails);
+  return res.json({
+    success: true,
+    details: baseDetails
+  });
 });
 
 // API: Real-Time EPG & Broadcast Guide ("يبث الآن") strictly built from real live matches & catalog events
@@ -936,8 +1892,8 @@ async function getDembedConfig(channelId: string | number): Promise<DembedConfig
   if (cached) return cached;
 
   const fallbackCfg: DembedConfig = {
-    src: `https://edge.cowedd4855ws.sbs/premium${strId}/index.m3u8`,
-    edge: 'https://edge.cowedd4855ws.sbs',
+    src: `https://edge.wedd48c.top/premium${strId}/index.m3u8`,
+    edge: 'https://edge.wedd48c.top',
     channel: `premium${strId}`
   };
 
@@ -954,7 +1910,7 @@ async function getDembedConfig(channelId: string | number): Promise<DembedConfig
       if (srcMatch && srcMatch[1]) {
         const cfg: DembedConfig = {
           src: srcMatch[1],
-          edge: edgeMatch?.[1] || 'https://edge.cowedd4855ws.sbs',
+          edge: edgeMatch?.[1] || 'https://edge.wedd48c.top',
           channel: chMatch?.[1] || `premium${strId}`
         };
         setCache(`dembed_cfg_${strId}`, cfg);
@@ -968,10 +1924,11 @@ async function getDembedConfig(channelId: string | number): Promise<DembedConfig
   return fallbackCfg;
 }
 
-async function getDembedAuthedM3u8Url(channelId: string | number): Promise<string | null> {
+async function getDembedAuthedM3u8Url(channelId: string | number, forceRefresh = false): Promise<string | null> {
   const cfg = await getDembedConfig(channelId);
   const tokenKey = `dembed_tok_${cfg.channel}`;
-  let token = getCached<string>(tokenKey, 50 * 1000);
+  // Cache token for 22s (well below upstream expiry) so playlists never hit 403 mid-stream
+  let token = forceRefresh ? null : getCached<string>(tokenKey, 22 * 1000);
 
   if (!token) {
     try {
@@ -1016,11 +1973,12 @@ function paeth(a: number, b: number, c: number): number {
 }
 
 function unwrapDembedSegment(bytes: Buffer): Buffer {
+  // 1. Already raw MPEG-TS
   if (bytes.length >= 188 && bytes[0] === 0x47 && bytes[188] === 0x47) {
     return bytes;
   }
 
-  // 1. WebP EXIF TS
+  // 2. WebP EXIF TS (matches daddy.php order)
   if (bytes.length >= 16 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP') {
     let off = 12;
     while (off + 8 <= bytes.length) {
@@ -1037,7 +1995,7 @@ function unwrapDembedSegment(bytes: Buffer): Buffer {
     }
   }
 
-  // 2. PNG IEND TS or PNG RGB Pixels (TIKTIKPX)
+  // 3. PNG IEND TS or PNG RGB Pixels (TIKTIKPX) (matches daddy.php order)
   if (bytes.length >= 16 && bytes[0] === 0x89 && bytes[1] === 0x50) {
     let off = 8;
     let w = 0;
@@ -1071,82 +2029,94 @@ function unwrapDembedSegment(bytes: Buffer): Buffer {
     }
 
     if (w && h && depth === 8 && !interlace && (ctype === 2 || ctype === 6) && idats.length > 0) {
-      const raw = zlib.inflateSync(Buffer.concat(idats));
-      const bpp = ctype === 6 ? 4 : 3;
-      const stride = w * bpp;
-      const rgb = Buffer.allocUnsafe(w * h * 3);
-      let src = 0;
-      let dst = 0;
-      let prev = new Uint8Array(stride);
+      try {
+        const raw = zlib.inflateSync(Buffer.concat(idats));
+        const bpp = ctype === 6 ? 4 : 3;
+        const stride = w * bpp;
+        const rgb = Buffer.allocUnsafe(w * h * 3);
+        let src = 0;
+        let dst = 0;
+        let prev = new Uint8Array(stride);
 
-      for (let y = 0; y < h; y++) {
-        if (src + 1 + stride > raw.length) break;
-        const filter = raw[src++];
-        const row = raw.subarray(src, src + stride);
-        src += stride;
+        for (let y = 0; y < h; y++) {
+          if (src + 1 + stride > raw.length) break;
+          const filter = raw[src++];
+          const row = raw.subarray(src, src + stride);
+          src += stride;
 
-        if (filter === 0) {
+          if (filter === 0) {
+            if (ctype === 2) {
+              row.copy(rgb, dst);
+              dst += stride;
+            } else {
+              for (let i = 0; i < stride; i += 4) {
+                rgb[dst++] = row[i];
+                rgb[dst++] = row[i + 1];
+                rgb[dst++] = row[i + 2];
+              }
+            }
+            prev = row;
+            continue;
+          }
+
+          const recon = new Uint8Array(stride);
+          for (let i = 0; i < stride; i++) {
+            const a = i >= bpp ? recon[i - bpp] : 0;
+            const b = prev[i];
+            const c = i >= bpp ? prev[i - bpp] : 0;
+            let v = row[i];
+            if (filter === 1) v += a;
+            else if (filter === 2) v += b;
+            else if (filter === 3) v += (a + b) >> 1;
+            else if (filter === 4) v += paeth(a, b, c);
+            recon[i] = v & 255;
+          }
+
           if (ctype === 2) {
-            row.copy(rgb, dst);
-            dst += w * 3;
+            rgb.set(recon, dst);
+            dst += stride;
           } else {
             for (let i = 0; i < stride; i += 4) {
-              rgb[dst++] = row[i];
-              rgb[dst++] = row[i + 1];
-              rgb[dst++] = row[i + 2];
+              rgb[dst++] = recon[i];
+              rgb[dst++] = recon[i + 1];
+              rgb[dst++] = recon[i + 2];
             }
           }
-          prev = row;
-          continue;
+          prev = recon;
         }
 
-        const recon = new Uint8Array(stride);
-        for (let i = 0; i < stride; i++) {
-          const a = i >= bpp ? recon[i - bpp] : 0;
-          const b = prev[i];
-          const c = i >= bpp ? prev[i - bpp] : 0;
-          let v = row[i];
-          if (filter === 1) v += a;
-          else if (filter === 2) v += b;
-          else if (filter === 3) v += (a + b) >> 1;
-          else if (filter === 4) v += paeth(a, b, c);
-          recon[i] = v & 255;
-        }
-
-        if (ctype === 2) {
-          Buffer.from(recon.buffer).copy(rgb, dst);
-          dst += stride;
-        } else {
-          for (let i = 0; i < stride; i += 4) {
-            rgb[dst++] = recon[i];
-            rgb[dst++] = recon[i + 1];
-            rgb[dst++] = recon[i + 2];
+        if (rgb.length >= 12 && rgb.subarray(0, 8).equals(TPIX)) {
+          const n = rgb.readUInt32BE(8);
+          if (n > 0 && 12 + n <= rgb.length) {
+            const gz = rgb.subarray(12, 12 + n);
+            return zlib.gunzipSync(gz);
           }
         }
-        prev = recon;
-      }
-
-      if (rgb.length >= 12 && rgb.subarray(0, 8).equals(TPIX)) {
-        const n = rgb.readUInt32BE(8);
-        if (n > 0 && 12 + n <= rgb.length) {
-          const gz = rgb.subarray(12, 12 + n);
-          return zlib.gunzipSync(gz);
-        }
+      } catch {
+        // Fallback below
       }
     }
   }
 
-  // 3. TRAW / TSGZ / raw 0x47 search
+  // 4. TRAW / TSGZ markers
   const trawIdx = bytes.indexOf(TRAW);
   if (trawIdx !== -1) {
     return bytes.subarray(trawIdx + TRAW.length);
   }
   const tsgzIdx = bytes.indexOf(TSGZ);
   if (tsgzIdx !== -1) {
-    return zlib.gunzipSync(bytes.subarray(tsgzIdx + TSGZ.length));
+    try {
+      return zlib.gunzipSync(bytes.subarray(tsgzIdx + TSGZ.length));
+    } catch {
+      // Continue if gunzip fails
+    }
   }
-  for (let i = 0; i + 188 < bytes.length; i++) {
-    if (bytes[i] === 0x47 && bytes[i + 188] === 0x47) return bytes.subarray(i);
+
+  // 5. Full scan for raw 0x47 sync byte alignment
+  for (let i = 0; i < bytes.length - 376; i++) {
+    if (bytes[i] === 0x47 && bytes[i + 188] === 0x47 && bytes[i + 376] === 0x47) {
+      return bytes.subarray(i);
+    }
   }
   return bytes;
 }
@@ -1498,15 +2468,11 @@ app.get('/api/clean-embed/:folder/:id', async (req: Request, res: Response) => {
           hls = new Hls({
             enableWorker: true,
             lowLatencyMode: false,
-            defaultAudioCodec: 'mp4a.40.2',
-            maxAudioFramesDrift: 8,
-            backBufferLength: 60,
-            maxBufferLength: 45,
-            maxMaxBufferLength: 90,
-            maxBufferSize: 50 * 1000 * 1000,
-            maxBufferHole: 1.5,
-            liveSyncDurationCount: 5,
-            liveMaxLatencyDurationCount: 12,
+            backBufferLength: 30,
+            maxBufferLength: 30,
+            maxMaxBufferLength: 60,
+            liveSyncDurationCount: 3,
+            liveMaxLatencyDurationCount: 10,
             manifestLoadingTimeOut: 15000,
             manifestLoadingMaxRetry: 4,
             levelLoadingTimeOut: 15000,
@@ -1514,10 +2480,6 @@ app.get('/api/clean-embed/:folder/:id', async (req: Request, res: Response) => {
             fragLoadingMaxRetry: 6,
             enableSoftwareAES: true
           });
-          if (hls.config) {
-            hls.config.defaultAudioCodec = 'mp4a.40.2';
-            hls.config.maxAudioFramesDrift = 8;
-          }
 
           hls.loadSource(streamUrl);
           hls.attachMedia(video);
@@ -1556,27 +2518,6 @@ app.get('/api/clean-embed/:folder/:id', async (req: Request, res: Response) => {
       }
 
       video.addEventListener('playing', hideOverlay);
-
-      // Stall Recovery Watchdog
-      var stallTimer = null;
-      function handleStall() {
-        if (stallTimer) clearTimeout(stallTimer);
-        stallTimer = setTimeout(function() {
-          if (video.buffered && video.buffered.length > 0) {
-            var end = video.buffered.end(video.buffered.length - 1);
-            if (end > video.currentTime + 1.0) {
-              video.currentTime = end - 0.4;
-            }
-          }
-          video.play().catch(function() {});
-          window.parent.postMessage({ type: 'KOLSTREAM_STALL_RECOVERED' }, '*');
-        }, 3500);
-      }
-      video.addEventListener('waiting', handleStall);
-      video.addEventListener('stalled', handleStall);
-      video.addEventListener('playing', function() {
-        if (stallTimer) clearTimeout(stallTimer);
-      });
 
       // Listen for parent controls
       window.addEventListener('message', function(ev) {
@@ -1724,37 +2665,61 @@ async function getCastServerM3u8(channelId: string | number): Promise<{ m3u8Url:
 }
 
 async function fetchDembedRewrittenPlaylist(id: string | number): Promise<string | null> {
-  try {
-    const dembedM3u8Url = await getDembedAuthedM3u8Url(id);
-    if (!dembedM3u8Url) return null;
-    const dembedRes = await fetch(dembedM3u8Url, {
-      headers: {
-        'User-Agent': UA,
-        'Origin': 'https://dembed.st',
-        'Referer': 'https://dembed.st/'
-      },
-      signal: AbortSignal.timeout(6000)
-    });
-    if (!dembedRes.ok) return null;
-    const playlistText = await dembedRes.text();
-    if (!playlistText.includes('#EXTM3U')) return null;
+  const attemptFetch = async (forceNewToken: boolean): Promise<string | null> => {
+    try {
+      const dembedM3u8Url = await getDembedAuthedM3u8Url(id, forceNewToken);
+      if (!dembedM3u8Url) return null;
+      const dembedRes = await fetch(dembedM3u8Url, {
+        headers: {
+          'User-Agent': UA,
+          'Origin': 'https://dembed.st',
+          'Referer': 'https://dembed.st/'
+        },
+        signal: AbortSignal.timeout(4500)
+      });
+      if (!dembedRes.ok) return null;
+      const playlistText = await dembedRes.text();
+      if (!playlistText.includes('#EXTM3U')) return null;
 
-    const baseUrl = dembedM3u8Url.substring(0, dembedM3u8Url.lastIndexOf('/') + 1);
-    return playlistText
-      .split('\n')
-      .map(line => {
+      const baseUrl = dembedM3u8Url.substring(0, dembedM3u8Url.lastIndexOf('/') + 1);
+      const rawLines = playlistText.split('\n');
+      const outLines: string[] = [];
+      let lastExtInfDuration = 5.0;
+
+      for (const line of rawLines) {
         const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) return line;
+        if (!trimmed) continue;
+        if (trimmed.startsWith('#')) {
+          const extMatch = trimmed.match(/^#EXTINF:([0-9.]+)/);
+          if (extMatch) {
+            lastExtInfDuration = parseFloat(extMatch[1]) || 5.0;
+          }
+          outLines.push(trimmed);
+          continue;
+        }
         let abs = trimmed;
         if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
           abs = new URL(trimmed, baseUrl).href;
         }
-        return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=dembed`;
-      })
-      .join('\n');
-  } catch {
-    return null;
-  }
+        outLines.push(`/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=dembed`);
+        // Dembed's upstream restreamer has a PTS discontinuity right after partial segments (<4.95s).
+        // Injecting #EXT-X-DISCONTINUITY tells Hls.js to cleanly realign PTS without freezing video or jumping!
+        if (lastExtInfDuration < 4.95) {
+          outLines.push('#EXT-X-DISCONTINUITY');
+          lastExtInfDuration = 5.0;
+        }
+      }
+      return outLines.join('\n');
+    } catch {
+      return null;
+    }
+  };
+
+  // First try with cached token; if expired/rejected, immediately refresh token once and retry
+  // so we never drop Dembed and switch MEDIA-SEQUENCE mid-stream!
+  const firstTry = await attemptFetch(false);
+  if (firstTry) return firstTry;
+  return attemptFetch(true);
 }
 
 async function fetchCastRewrittenPlaylist(id: string | number): Promise<string | null> {
@@ -1767,7 +2732,7 @@ async function fetchCastRewrittenPlaylist(id: string | number): Promise<string |
         'Origin': castInfo.origin,
         'Referer': `${castInfo.origin}/`
       },
-      signal: AbortSignal.timeout(7000)
+      signal: AbortSignal.timeout(5000)
     });
     if (!castRes.ok) return null;
     const playlistText = await castRes.text();
@@ -1800,13 +2765,12 @@ async function fetchWideRewrittenPlaylist(id: string | number): Promise<string |
 
     const m3u8Res = await fetch(directUrl, {
       headers: { 'User-Agent': UA, 'Referer': 'https://wideiptv.top/' },
-      signal: AbortSignal.timeout(4500)
+      signal: AbortSignal.timeout(4000)
     });
     if (!m3u8Res.ok) return null;
     const playlistText = await m3u8Res.text();
     if (!playlistText.includes('#EXTM3U')) return null;
 
-    // Skip broken upstream streams (e.g. beINAR when bandwidth < 300kbps or missing audio track)
     const bwMatch = playlistText.match(/BANDWIDTH=(\d+)/);
     if (bwMatch && parseInt(bwMatch[1], 10) < 300000) {
       return null;
@@ -1833,10 +2797,10 @@ async function fetchWideRewrittenPlaylist(id: string | number): Promise<string |
   }
 }
 
-// API: Proxy Master/Media M3U8 playlist supporting 3 distinct upstream CDNs:
-// - source=dembed (Server 1 Primary: Dembed Edge 1080p H.264 + AAC)
-// - source=cast   (Server 2 Alternate: Cast / Tossequip HLS CDN)
-// - source=wide   (Server 3 Backup: WideIPTV / Bluetier CDN)
+// Keep track of sticky provider per channel+source so MEDIA-SEQUENCE never flips mid-playback
+const stickyProviderMap = new Map<string, { provider: 'dembed' | 'cast' | 'wide'; ts: number }>();
+
+// API: Proxy Master/Media M3U8 playlist supporting 3 distinct upstream CDNs
 app.get('/api/proxy-stream/:id/live.m3u8', async (req: Request, res: Response) => {
   const id = req.params.id;
   const preferredSource = (req.query.source as string) || 'dembed';
@@ -1846,14 +2810,22 @@ app.get('/api/proxy-stream/:id/live.m3u8', async (req: Request, res: Response) =
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 
   try {
-    const order: Array<'dembed' | 'cast' | 'wide'> =
+    const stickyKey = `${id}_${preferredSource}`;
+    const sticky = stickyProviderMap.get(stickyKey);
+
+    let baseOrder: Array<'dembed' | 'cast' | 'wide'> =
       preferredSource === 'cast'
         ? ['cast', 'dembed', 'wide']
         : preferredSource === 'wide'
           ? ['wide', 'dembed', 'cast']
           : ['dembed', 'cast', 'wide'];
 
-    for (const provider of order) {
+    // If a provider is already actively serving this channel within the last 2 minutes, try it first!
+    if (sticky && Date.now() - sticky.ts < 120000) {
+      baseOrder = [sticky.provider, ...baseOrder.filter(p => p !== sticky.provider)];
+    }
+
+    for (const provider of baseOrder) {
       let playlist: string | null = null;
       if (provider === 'dembed') {
         playlist = await fetchDembedRewrittenPlaylist(id);
@@ -1863,6 +2835,7 @@ app.get('/api/proxy-stream/:id/live.m3u8', async (req: Request, res: Response) =
         playlist = await fetchWideRewrittenPlaylist(id);
       }
       if (playlist) {
+        stickyProviderMap.set(stickyKey, { provider, ts: Date.now() });
         res.setHeader('X-Active-Stream-Provider', provider);
         return res.send(playlist);
       }
@@ -1874,6 +2847,29 @@ app.get('/api/proxy-stream/:id/live.m3u8', async (req: Request, res: Response) =
   }
 });
 
+// High-speed in-memory LRU cache & in-flight deduplication for TS video chunks
+// Prevents duplicate upstream downloads and CPU stalls during live playback or Multi-Screen
+const tsSegmentCache = new Map<string, { buffer: Buffer; ts: number }>();
+const inflightSegmentFetches = new Map<string, Promise<{ kind: 'm3u8' | 'ts'; data: string | Buffer } | null>>();
+
+function getCachedSegment(url: string): Buffer | null {
+  const entry = tsSegmentCache.get(url);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > 25000) {
+    tsSegmentCache.delete(url);
+    return null;
+  }
+  return entry.buffer;
+}
+
+function setCachedSegment(url: string, buffer: Buffer): void {
+  if (tsSegmentCache.size >= 45) {
+    const oldestKey = tsSegmentCache.keys().next().value;
+    if (oldestKey) tsSegmentCache.delete(oldestKey);
+  }
+  tsSegmentCache.set(url, { buffer, ts: Date.now() });
+}
+
 // API: Proxy video TS chunks & child m3u8 playlists (Automatically unwraps Dembed PNG/WebP segments into pure MPEG-TS)
 app.get('/api/proxy-chunk', async (req: Request, res: Response) => {
   const url = req.query.url as string;
@@ -1881,63 +2877,108 @@ app.get('/api/proxy-chunk', async (req: Request, res: Response) => {
   const customOrigin = (req.query.origin as string) || 'https://tossequip.net';
   if (!url) return res.status(400).send('Missing url');
 
-  try {
-    const headers: Record<string, string> = { 'User-Agent': UA };
-    if (mode === 'dembed') {
-      headers['Origin'] = 'https://dembed.st';
-      headers['Referer'] = 'https://dembed.st/';
-    } else if (mode === 'cast') {
-      headers['Origin'] = customOrigin;
-      headers['Referer'] = `${customOrigin}/`;
-    } else {
-      headers['Referer'] = 'https://wideiptv.top/';
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  // 1. Check in-memory decoded TS segment cache first (<1ms response!)
+  if (!url.includes('.m3u8')) {
+    const cachedTs = getCachedSegment(url);
+    if (cachedTs) {
+      res.setHeader('Content-Type', 'video/MP2T');
+      res.setHeader('Cache-Control', 'public, max-age=30');
+      return res.send(cachedTs);
     }
-
-    const upstreamRes = await fetch(url, {
-      headers,
-      signal: AbortSignal.timeout(12000)
-    });
-
-    if (!upstreamRes.ok) {
-      return res.status(upstreamRes.status).send('Chunk fetch failed');
-    }
-
-    const contentType = upstreamRes.headers.get('content-type') || '';
-    res.setHeader('Access-Control-Allow-Origin', '*');
-
-    if (contentType.includes('mpegurl') || url.includes('.m3u8')) {
-      const text = await upstreamRes.text();
-      if (text.includes('#EXTM3U')) {
-        const baseUrl = url.substring(0, url.lastIndexOf('/') + 1);
-        const rewritten = text
-          .split('\n')
-          .map(line => {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith('#')) return line;
-            let abs = trimmed;
-            if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
-              abs = new URL(trimmed, baseUrl).href;
-            }
-            return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=${mode}&origin=${encodeURIComponent(customOrigin)}`;
-          })
-          .join('\n');
-        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        return res.send(rewritten);
-      }
-    }
-
-    const rawBuffer = Buffer.from(await upstreamRes.arrayBuffer());
-    const tsBuffer = mode === 'dembed' || (rawBuffer.length > 0 && rawBuffer[0] !== 0x47)
-      ? unwrapDembedSegment(rawBuffer)
-      : rawBuffer;
-
-    res.setHeader('Content-Type', 'video/MP2T');
-    res.setHeader('Cache-Control', 'public, max-age=10');
-    return res.send(tsBuffer);
-  } catch {
-    return res.status(500).send('Chunk proxy error');
   }
+
+  // 2. Deduplicate concurrent in-flight requests for the same URL
+  let inflight = inflightSegmentFetches.get(url);
+  if (!inflight) {
+    inflight = (async () => {
+      try {
+        const headers: Record<string, string> = {
+          'User-Agent': UA,
+          'Connection': 'keep-alive'
+        };
+        if (mode === 'dembed') {
+          headers['Origin'] = 'https://dembed.st';
+          headers['Referer'] = 'https://dembed.st/';
+        } else if (mode === 'cast') {
+          headers['Origin'] = customOrigin;
+          headers['Referer'] = `${customOrigin}/`;
+        } else {
+          headers['Referer'] = 'https://wideiptv.top/';
+        }
+
+        // Fast fetch with automatic retry if upstream CDN hiccups
+        let upstreamRes: globalThis.Response | null = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const r = await fetch(url, {
+              headers,
+              signal: AbortSignal.timeout(8000)
+            });
+            if (r.ok) {
+              upstreamRes = r;
+              break;
+            }
+          } catch {
+            // retry once
+          }
+        }
+
+        if (!upstreamRes || !upstreamRes.ok) return null;
+
+        const contentType = upstreamRes.headers.get('content-type') || '';
+        if (contentType.includes('mpegurl') || url.includes('.m3u8')) {
+          const text = await upstreamRes.text();
+          if (text.includes('#EXTM3U')) {
+            const baseUrl = url.substring(0, url.lastIndexOf('/') + 1);
+            const rewritten = text
+              .split('\n')
+              .map(line => {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed.startsWith('#')) return line;
+                let abs = trimmed;
+                if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+                  abs = new URL(trimmed, baseUrl).href;
+                }
+                return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=${mode}&origin=${encodeURIComponent(customOrigin)}`;
+              })
+              .join('\n');
+            return { kind: 'm3u8' as const, data: rewritten };
+          }
+        }
+
+        const rawBuffer = Buffer.from(await upstreamRes.arrayBuffer());
+        const tsBuffer =
+          mode === 'dembed' || (rawBuffer.length > 0 && rawBuffer[0] !== 0x47)
+            ? unwrapDembedSegment(rawBuffer)
+            : rawBuffer;
+
+        setCachedSegment(url, tsBuffer);
+        return { kind: 'ts' as const, data: tsBuffer };
+      } catch {
+        return null;
+      } finally {
+        inflightSegmentFetches.delete(url);
+      }
+    })();
+    inflightSegmentFetches.set(url, inflight);
+  }
+
+  const result = await inflight;
+  if (!result) {
+    return res.status(502).send('Chunk fetch failed');
+  }
+
+  if (result.kind === 'm3u8') {
+    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    return res.send(result.data);
+  }
+
+  res.setHeader('Content-Type', 'video/MP2T');
+  res.setHeader('Cache-Control', 'public, max-age=30');
+  return res.send(result.data);
 });
 
 // SEO: robots.txt

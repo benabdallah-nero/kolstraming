@@ -106,3 +106,91 @@ export interface QualityOption {
   description: string;
   bitrateEstimate: string;
 }
+
+export type MatchDateKey = 'yesterday' | 'today' | 'tomorrow';
+
+export interface LeagueInfo {
+  id: string;
+  name: string;
+  shortName: string;
+  country: string;
+  region: 'europe' | 'arab' | 'continental';
+  season: string;
+  clSpots: number;
+  elSpots: number;
+  relegationSpots: number;
+}
+
+export interface StandingRow {
+  rank: number;
+  team: {
+    name: string;
+    logo?: string;
+  };
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDiff: number;
+  points: number;
+  form: Array<'W' | 'D' | 'L'>;
+  zone?: 'ucl' | 'uel' | 'relegation' | 'normal';
+}
+
+export interface MatchEventItem {
+  id: string;
+  minute: string;
+  team: 'A' | 'B';
+  type: 'goal' | 'penalty_goal' | 'yellow_card' | 'red_card' | 'sub';
+  player: string;
+  assistOrSubOut?: string;
+  detail?: string;
+}
+
+export interface MatchLineupPlayer {
+  number: number;
+  name: string;
+  position: 'GK' | 'DEF' | 'MID' | 'FWD';
+  isCaptain?: boolean;
+  rating?: string;
+}
+
+export interface MatchLineupTeam {
+  formation: string;
+  coach: string;
+  startingXI: MatchLineupPlayer[];
+  substitutes: MatchLineupPlayer[];
+}
+
+export interface MatchStatItem {
+  label: string;
+  valueA: string | number;
+  valueB: string | number;
+  percentA: number;
+  percentB: number;
+}
+
+export interface MatchH2HItem {
+  date: string;
+  competition: string;
+  teamA: string;
+  teamB: string;
+  scoreA: number;
+  scoreB: number;
+}
+
+export interface MatchDetailsData {
+  matchId: string;
+  stadium: string;
+  referee: string;
+  attendance?: string;
+  round?: string;
+  events: MatchEventItem[];
+  lineupA: MatchLineupTeam;
+  lineupB: MatchLineupTeam;
+  stats: MatchStatItem[];
+  h2h: MatchH2HItem[];
+}
+
