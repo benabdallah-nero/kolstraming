@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { LiveMatch, MatchDetailsData } from '../types';
 import { getApiUrl } from '../context/AppContext';
-import { buildMatchDetailsForMatch } from '../utils/footballData';
+import { buildMatchDetailsForMatch, fetchMatchDetailsWithFallback } from '../utils/footballData';
 
 interface MatchDetailsModalProps {
   match: LiveMatch | null;
@@ -34,7 +34,7 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
     setActiveTab(match.status === 'FIXTURE' ? 'lineups' : 'events');
     setLoading(true);
 
-    // Build instant local details first so UI is immediate, and also query API
+    // Build instant empty shell first so modal renders immediately while querying live data
     const instantDetails = buildMatchDetailsForMatch(match);
     setDetails(instantDetails);
 
@@ -48,11 +48,13 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
     });
 
     let cancelled = false;
-    fetch(getApiUrl(`/api/match-details/${encodeURIComponent(match.id)}?${qs.toString()}`))
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        if (!cancelled && data && data.success && data.details) {
-          setDetails(data.details);
+    fetchMatchDetailsWithFallback(
+      match,
+      getApiUrl(`/api/match-details/${encodeURIComponent(match.id)}?${qs.toString()}`)
+    )
+      .then(liveDetails => {
+        if (!cancelled && liveDetails) {
+          setDetails(liveDetails);
         }
       })
       .catch(() => {})

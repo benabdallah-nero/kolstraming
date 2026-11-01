@@ -187,26 +187,28 @@ export const STATIC_CHANNELS: Channel[] = [
 
 // Helper to fetch external HTML from browser when deployed on static-only hosting (e.g. Cloudflare static assets)
 async function fetchHtmlViaCorsProxy(targetUrl: string): Promise<string | null> {
-  const proxies = [
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
-    `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`
+  const attempts: Array<{ url: string; headers?: Record<string, string> }> = [
+    { url: `https://r.jina.ai/${targetUrl}`, headers: { 'X-Return-Format': 'html' } },
+    { url: `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}` },
+    { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}` }
   ];
 
-  for (const proxyUrl of proxies) {
-    try {
-      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(7000) });
-      if (res.ok) {
+  try {
+    return await Promise.any(
+      attempts.map(async item => {
+        const res = await fetch(item.url, {
+          headers: item.headers,
+          signal: AbortSignal.timeout(7000)
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const text = await res.text();
-        if (text && text.length > 200) {
-          return text;
-        }
-      }
-    } catch {
-      // try next proxy
-    }
+        if (!text || text.length < 200) throw new Error('Empty');
+        return text;
+      })
+    );
+  } catch {
+    return null;
   }
-  return null;
 }
 
 function isExcludedChannelName(rawName: string): boolean {
@@ -468,9 +470,11 @@ async function scrapeRealMatchesClientSide(): Promise<{ matches: LiveMatch[]; di
       let tournament = tournMatch ? tournMatch[1].replace(/<[^>]+>/g, '').trim() : 'مباراة رسمية';
       if (/طائرة|يد|سلة|قسم ثاني|القسم الثاني|درجة ثانية|هواة/i.test(tournament)) continue;
 
-      const items = card.split(/<div class="allData">/);
+      const items = card.split(/<div[^>]*livescorematchid=/i);
       for (let j = 1; j < items.length; j++) {
-        const item = items[j];
+        const item = 'livescorematchid=' + items[j];
+        const ykIdMatch = item.match(/livescorematchid=["'](\d+)["']/i) || item.match(/\/match\/(\d+)\//i);
+        const ykMatchId = ykIdMatch ? ykIdMatch[1] : null;
         const teamA = item.match(/class="teams teamA".*?<p>(.*?)<\/p>/s)?.[1]?.trim();
         const teamB = item.match(/class="teams teamB".*?<p>(.*?)<\/p>/s)?.[1]?.trim();
         if (!teamA || !teamB) continue;
@@ -531,7 +535,7 @@ async function scrapeRealMatchesClientSide(): Promise<{ matches: LiveMatch[]; di
 
         matchIdx++;
         liveList.push({
-          id: `yk_${matchIdx}`,
+          id: ykMatchId ? `yk_${ykMatchId}` : `yk_${matchIdx}`,
           competition: tournament,
           teamA: { name: teamA, logo: logoA },
           teamB: { name: teamB, logo: logoB },

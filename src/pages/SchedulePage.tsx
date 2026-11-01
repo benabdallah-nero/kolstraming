@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useApp, getApiUrl } from '../context/AppContext';
 import { LiveMatch, MatchDateKey } from '../types';
+import { fetchMatchesByDateWithFallback } from '../utils/footballData';
 import { Pagination } from '../components/Pagination';
 import { MatchDetailsModal } from '../components/MatchDetailsModal';
 import { usePageSeo } from '../hooks/usePageSeo';
@@ -77,15 +78,12 @@ export const SchedulePage: React.FC = () => {
       if (dateKey === 'today' && !force) return;
       setLoadingDateMatches(true);
       try {
-        const res = await fetch(getApiUrl(`/api/live-matches?date=${dateKey}`), {
-          headers: { Accept: 'application/json' },
-          signal: AbortSignal.timeout(7000)
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.success && Array.isArray(data.matches)) {
-            setDateMatchesMap(prev => ({ ...prev, [dateKey]: data.matches }));
-          }
+        const list = await fetchMatchesByDateWithFallback(
+          dateKey,
+          getApiUrl(`/api/live-matches?date=${dateKey}`)
+        );
+        if (list.length > 0) {
+          setDateMatchesMap(prev => ({ ...prev, [dateKey]: list }));
         }
       } catch {
         // Keep existing state

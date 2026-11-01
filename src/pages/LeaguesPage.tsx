@@ -10,7 +10,8 @@ import {
 import { useApp, getApiUrl } from '../context/AppContext';
 import { LeagueInfo, StandingRow, LiveMatch } from '../types';
 import {
-  LEAGUES_CATALOG
+  LEAGUES_CATALOG,
+  fetchStandingsWithFallback
 } from '../utils/footballData';
 import { MatchDetailsModal } from '../components/MatchDetailsModal';
 import { usePageSeo } from '../hooks/usePageSeo';
@@ -46,19 +47,16 @@ export const LeaguesPage: React.FC = () => {
     setLoading(true);
 
     let cancelled = false;
-    fetch(getApiUrl(`/api/standings?league=${encodeURIComponent(selectedLeagueId)}`), {
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(8000)
-    })
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        if (!cancelled && data && data.success) {
-          if (data.league?.season) {
-            setLiveSeason(data.league.season);
+    fetchStandingsWithFallback(
+      selectedLeagueId,
+      getApiUrl(`/api/standings?league=${encodeURIComponent(selectedLeagueId)}`)
+    )
+      .then(result => {
+        if (!cancelled) {
+          if (result.season) {
+            setLiveSeason(result.season);
           }
-          if (Array.isArray(data.standings)) {
-            setStandings(data.standings);
-          }
+          setStandings(result.rows);
         }
       })
       .catch(() => {})

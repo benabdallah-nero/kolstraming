@@ -1,6 +1,16 @@
 // Cloudflare Worker Entry Point (Full-Stack Edge Backend + Static Assets SPA Fallback)
-// Handles /api/channels, /api/live-matches, /api/epg/live, /api/resolve-m3u8/:id,
-// /api/proxy-stream/:id/live.m3u8, /api/proxy-chunk, /robots.txt, /sitemap.xml
+// Handles /api/channels, /api/live-matches, /api/standings, /api/match-details/:id,
+// /api/epg/live, /api/resolve-m3u8/:id, /api/proxy-stream/:id/live.m3u8, /api/proxy-chunk
+
+import {
+  LEAGUES_CATALOG,
+  YALLAKORA_STANDING_PATHS,
+  ESPN_LEAGUE_SLUGS,
+  parseYallakoraStandingsHtml,
+  parseEspnStandingsToArabic,
+  buildMatchDetailsForMatch,
+  parseYallakoraEventsFromHtml
+} from './src/utils/footballData';
 
 interface Env {
   ASSETS?: {
@@ -426,9 +436,19 @@ function translateCompetition(comp: string): string {
   return comp;
 }
 
-async function getLiveMatchesList(): Promise<any[]> {
-  const cachedMatches = getCached<any[]>('live_matches_realtime_v2', 20 * 1000);
+async function getLiveMatchesList(dateKey: 'yesterday' | 'today' | 'tomorrow' = 'today'): Promise<any[]> {
+  const cacheKey = `live_matches_realtime_v3_${dateKey}`;
+  const cachedMatches = getCached<any[]>(cacheKey, dateKey === 'today' ? 20 * 1000 : 120 * 1000);
   if (cachedMatches) return cachedMatches;
+
+  const targetDate = new Date();
+  if (dateKey === 'yesterday') targetDate.setUTCDate(targetDate.getUTCDate() - 1);
+  else if (dateKey === 'tomorrow') targetDate.setUTCDate(targetDate.getUTCDate() + 1);
+  const ykDate = `${targetDate.getUTCMonth() + 1}/${targetDate.getUTCDate()}/${targetDate.getUTCFullYear()}`;
+  const ykUrl =
+    dateKey === 'today'
+      ? 'https://www.yallakora.com/matches-center'
+      : `https://www.yallakora.com/matches-center?date=${encodeURIComponent(ykDate)}`;
 
   const mapBroadcaster = (rawChannel: string | null) => {
     if (!rawChannel || rawChannel.trim().length === 0) {
@@ -471,11 +491,11 @@ async function getLiveMatchesList(): Promise<any[]> {
   };
 
   const [ykRes, dliveCatalog] = await Promise.allSettled([
-    fetch('https://www.yallakora.com/matches-center', {
+    fetch(ykUrl, {
       headers: { 'User-Agent': UA, 'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8' },
       signal: AbortSignal.timeout(4500)
     }),
-    fetchDliveSoccerCatalog()
+    dateKey === 'today' ? fetchDliveSoccerCatalog() : Promise.resolve({ events: [], discoveredChannels: [] })
   ]);
 
   const dliveEvents = dliveCatalog.status === 'fulfilled' ? dliveCatalog.value.events : [];
@@ -494,9 +514,12 @@ async function getLiveMatchesList(): Promise<any[]> {
       const lowerTourn = tournament.toLowerCase();
       if (/طائرة|يد|سلة|قسم ثاني|القسم الثاني|درجة ثانية|هواة/.test(lowerTourn)) continue;
 
-      const items = card.split(/<div class="allData">/);
+      const items = card.split(/<div[^>]*livescorematchid=/i);
       for (let j = 1; j < items.length; j++) {
-        const item = items[j];
+        const item = 'livescorematchid=' + items[j];
+        const ykIdMatch = item.match(/livescorematchid=["'](\d+)["']/i) || item.match(/\/match\/(\d+)\//i);
+        const ykMatchId = ykIdMatch ? ykIdMatch[1] : null;
+
         const teamAMatch = item.match(/class="teams teamA".*?<p>(.*?)<\/p>/s);
         const teamA = teamAMatch ? teamAMatch[1].trim() : null;
         const teamBMatch = item.match(/class="teams teamB".*?<p>(.*?)<\/p>/s);
@@ -552,7 +575,7 @@ async function getLiveMatchesList(): Promise<any[]> {
 
         matchIdx++;
         liveList.push({
-          id: `yk_${matchIdx}`,
+          id: ykMatchId ? `yk_${ykMatchId}` : `yk_${matchIdx}`,
           competition: tournament,
           teamA: { name: teamA, logo: logoA },
           teamB: { name: teamB, logo: logoB },
@@ -607,7 +630,7 @@ async function getLiveMatchesList(): Promise<any[]> {
   });
 
   if (liveList.length > 0) {
-    setCache('live_matches_realtime_v2', liveList);
+    setCache(cacheKey, liveList);
   }
   return liveList;
 }
@@ -1206,8 +1229,275 @@ export default {
 
       // /api/live-matches
       if (pathname === '/api/live-matches') {
-        const matches = await getLiveMatchesList();
-        return jsonResponse({ success: true, count: matches.length, matches }, 200, 30);
+        const rawDate = url.searchParams.get('date') || 'today';
+        const dateKey: 'yesterday' | 'today' | 'tomorrow' =
+          rawDate === 'yesterday' ? 'yesterday' : rawDate === 'tomorrow' ? 'tomorrow' : 'today';
+        const matches = await getLiveMatchesList(dateKey);
+        return jsonResponse({ success: true, date: dateKey, count: matches.length, matches }, 200, 30);
+      }
+
+      // /api/standings (Live from Yallakora Arabic Standings + ESPN Standings API — Zero Hardcoded Data)
+      if (pathname === '/api/standings') {
+        const leagueId = (url.searchParams.get('league') || 'epl').toLowerCase();
+        const baseLeagueInfo = LEAGUES_CATALOG.find(l => l.id === leagueId) || LEAGUES_CATALOG[0];
+        const cacheKey = `edge_standings_v3_${baseLeagueInfo.id}`;
+        const cached = getCached<{ rows: any[]; season: string }>(cacheKey, 5 * 60 * 1000);
+        if (cached) {
+          return jsonResponse({
+            success: true,
+            league: { ...baseLeagueInfo, season: cached.season },
+            leagues: LEAGUES_CATALOG,
+            standings: cached.rows
+          }, 200, 180);
+        }
+
+        const ykPath = YALLAKORA_STANDING_PATHS[baseLeagueInfo.id];
+        if (ykPath) {
+          const targetYkUrl = `https://www.yallakora.com${ykPath}`;
+          const reqConfigs: Array<{ url: string; headers: Record<string, string> }> = [
+            { url: targetYkUrl, headers: { 'User-Agent': UA, 'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8' } },
+            { url: `https://r.jina.ai/${targetYkUrl}`, headers: { 'X-Return-Format': 'html', 'User-Agent': UA } }
+          ];
+          for (const reqCfg of reqConfigs) {
+            try {
+              const ykRes = await fetch(reqCfg.url, {
+                headers: reqCfg.headers,
+                signal: AbortSignal.timeout(5500)
+              });
+              if (ykRes.ok) {
+                const html = await ykRes.text();
+                const parsedYk = parseYallakoraStandingsHtml(html, baseLeagueInfo);
+                if (parsedYk && parsedYk.rows.length > 0) {
+                  const liveSeason = parsedYk.season || baseLeagueInfo.season;
+                  setCache(cacheKey, { rows: parsedYk.rows, season: liveSeason });
+                  return jsonResponse({
+                    success: true,
+                    league: { ...baseLeagueInfo, season: liveSeason },
+                    leagues: LEAGUES_CATALOG,
+                    standings: parsedYk.rows
+                  }, 200, 180);
+                }
+              }
+            } catch {
+              // Try next source
+            }
+          }
+        }
+
+        const espnSlug = ESPN_LEAGUE_SLUGS[baseLeagueInfo.id];
+        if (espnSlug) {
+          try {
+            const espnRes = await fetch(
+              `https://site.api.espn.com/apis/v2/sports/soccer/${espnSlug}/standings`,
+              {
+                headers: { 'User-Agent': UA },
+                signal: AbortSignal.timeout(5000)
+              }
+            );
+            if (espnRes.ok) {
+              const espnJson = await espnRes.json();
+              const parsed = parseEspnStandingsToArabic(espnJson, baseLeagueInfo);
+              if (parsed && parsed.length > 0) {
+                const espnSeasonMatch = String(
+                  (espnJson as any)?.children?.[0]?.standings?.seasonDisplayName ||
+                    (espnJson as any)?.seasons?.[0]?.displayName ||
+                    ''
+                ).match(/(\d{4})[-/](\d{2,4})/);
+                const liveSeason = espnSeasonMatch
+                  ? `${espnSeasonMatch[1]} / ${
+                      espnSeasonMatch[2].length === 2
+                        ? espnSeasonMatch[1].slice(0, 2) + espnSeasonMatch[2]
+                        : espnSeasonMatch[2]
+                    }`
+                  : baseLeagueInfo.season;
+                setCache(cacheKey, { rows: parsed, season: liveSeason });
+                return jsonResponse({
+                  success: true,
+                  league: { ...baseLeagueInfo, season: liveSeason },
+                  leagues: LEAGUES_CATALOG,
+                  standings: parsed
+                }, 200, 180);
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        return jsonResponse({
+          success: false,
+          league: baseLeagueInfo,
+          leagues: LEAGUES_CATALOG,
+          standings: []
+        }, 200, 15);
+      }
+
+      // /api/match-details/:id
+      const detailsMatch = pathname.match(/^\/api\/match-details\/([^/]+)$/);
+      if (detailsMatch) {
+        const matchId = decodeURIComponent(detailsMatch[1]);
+        const teamAName = url.searchParams.get('teamA') || 'الفريق الأول';
+        const teamBName = url.searchParams.get('teamB') || 'الفريق الثاني';
+        const competition = url.searchParams.get('competition') || 'بطولة كرة القدم';
+        const status = (url.searchParams.get('status') || 'FIXTURE') as 'LIVE' | 'FIXTURE' | 'RESULT';
+        const scoreARaw = url.searchParams.get('scoreA');
+        const scoreBRaw = url.searchParams.get('scoreB');
+
+        const baseDetails = buildMatchDetailsForMatch({
+          id: matchId,
+          competition,
+          teamA: { name: teamAName },
+          teamB: { name: teamBName },
+          scoreA: scoreARaw !== null && scoreARaw !== '' ? Number(scoreARaw) : null,
+          scoreB: scoreBRaw !== null && scoreBRaw !== '' ? Number(scoreBRaw) : null,
+          status,
+          time: '21:00',
+          channels: [],
+          isBeinArabic: true,
+          broadcasterLabel: '',
+          network: 'bein_ar'
+        });
+
+        const ykDirect = matchId.match(/^yk_(\d+)$/);
+        const ykId = ykDirect && parseInt(ykDirect[1], 10) > 1000 ? ykDirect[1] : null;
+
+        if (ykId) {
+          const postHeaders = {
+            'User-Agent': UA,
+            'Content-Type': 'application/json; charset=utf-8',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Referer': 'https://www.yallakora.com/'
+          };
+          const pageUrl = `https://www.yallakora.com/Match/?matchID=${ykId}`;
+
+          const [sqRes, stRes, h2hRes, pageRes, minPage2Res] = await Promise.allSettled([
+            fetch(`https://www.yallakora.com/Match/Matchsquad2?matchID=${ykId}`, {
+              method: 'POST',
+              headers: postHeaders,
+              signal: AbortSignal.timeout(4500)
+            }),
+            fetch(`https://www.yallakora.com/Match/EuroMatchStats2?matchID=${ykId}`, {
+              method: 'POST',
+              headers: postHeaders,
+              signal: AbortSignal.timeout(4500)
+            }),
+            fetch(`https://www.yallakora.com/Match/GetTeamsHeadToHeadMatches?matchID=${ykId}`, {
+              method: 'POST',
+              headers: postHeaders,
+              signal: AbortSignal.timeout(4500)
+            }),
+            fetch(pageUrl, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(4500) }),
+            fetch(`https://www.yallakora.com/match/MatchMinByMinPaging?matchId=${ykId}&PageIndex=2&PageSize=30`, {
+              headers: { 'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest', 'Referer': pageUrl },
+              signal: AbortSignal.timeout(4500)
+            })
+          ]);
+
+          if (sqRes.status === 'fulfilled' && sqRes.value.ok) {
+            const sqHtml = await sqRes.value.text();
+            const formMatches = [...sqHtml.matchAll(/<div class="formName">\s*<span>(.*?)<\/span>/gs)];
+            const formationA = formMatches[0]?.[1]?.trim() || '4-3-3';
+            const formationB = formMatches[1]?.[1]?.trim() || '4-3-3';
+
+            const parseSquadBlock = (blockHtml: string, isSub: boolean) => {
+              const players: Array<{ number: number; name: string; position: 'GK' | 'DEF' | 'MID' | 'FWD' }> = [];
+              const rx = /<div class="playerNum">\s*([0-9]+)\s*<\/div>\s*<p class="playerName">\s*(.*?)\s*<\/p>/gs;
+              let m: RegExpExecArray | null;
+              let idx = 0;
+              while ((m = rx.exec(blockHtml)) !== null) {
+                const num = parseInt(m[1], 10) || idx + 1;
+                const name = m[2].replace(/<[^>]+>/g, '').trim();
+                if (name) {
+                  players.push({
+                    number: num,
+                    name,
+                    position: idx === 0 ? 'GK' : idx <= 4 ? 'DEF' : idx <= 7 ? 'MID' : 'FWD'
+                  });
+                  idx++;
+                }
+              }
+              return isSub ? players.slice(0, 9) : players;
+            };
+
+            const mainIdx = sqHtml.indexOf('teamSquad Main');
+            const subIdx = sqHtml.indexOf('teamSquad Sub');
+            if (mainIdx !== -1) {
+              const mainSec = subIdx !== -1 ? sqHtml.slice(mainIdx, subIdx) : sqHtml.slice(mainIdx);
+              const tBIdx = mainSec.indexOf('<div class="teamB">');
+              if (tBIdx !== -1) {
+                baseDetails.lineupA.formation = formationA;
+                baseDetails.lineupB.formation = formationB;
+                baseDetails.lineupA.startingXI = parseSquadBlock(mainSec.slice(0, tBIdx), false);
+                baseDetails.lineupB.startingXI = parseSquadBlock(mainSec.slice(tBIdx), false);
+              }
+            }
+            if (subIdx !== -1) {
+              const subSec = sqHtml.slice(subIdx);
+              const tBSubIdx = subSec.indexOf('<div class="teamB">');
+              if (tBSubIdx !== -1) {
+                baseDetails.lineupA.substitutes = parseSquadBlock(subSec.slice(0, tBSubIdx), true);
+                baseDetails.lineupB.substitutes = parseSquadBlock(subSec.slice(tBSubIdx), true);
+              }
+            }
+          }
+
+          if (pageRes.status === 'fulfilled' && pageRes.value.ok) {
+            const pageHtml = await pageRes.value.text();
+            const minPage2Html =
+              minPage2Res.status === 'fulfilled' && minPage2Res.value.ok
+                ? await minPage2Res.value.text()
+                : '';
+            const events = parseYallakoraEventsFromHtml(pageHtml, minPage2Html);
+            if (events.length > 0) baseDetails.events = events;
+          }
+
+          if (stRes.status === 'fulfilled' && stRes.value.ok) {
+            const stHtml = await stRes.value.text();
+            const statItems = [
+              ...stHtml.matchAll(
+                /<li>\s*<div class="team teamA">\s*([0-9.%]+)\s*<\/div>\s*<div class="desc">\s*(.*?)\s*<\/div>\s*<div class="team teamB">\s*([0-9.%]+)\s*<\/div>\s*<\/li>/gs
+              )
+            ];
+            for (const st of statItems) {
+              const valA = parseFloat(st[1]) || 0;
+              const label = st[2].replace(/<[^>]+>/g, '').trim();
+              const valB = parseFloat(st[3]) || 0;
+              const total = valA + valB;
+              baseDetails.stats.push({
+                label,
+                valueA: st[1].trim(),
+                valueB: st[3].trim(),
+                percentA: total > 0 ? Math.round((valA / total) * 100) : 50,
+                percentB: total > 0 ? Math.round((valB / total) * 100) : 50
+              });
+            }
+          }
+
+          if (h2hRes.status === 'fulfilled' && h2hRes.value.ok) {
+            const h2hHtml = await h2hRes.value.text();
+            const blocks = h2hHtml.split(/<div class="matchDtls">/);
+            for (let i = 1; i < blocks.length && baseDetails.h2h.length < 6; i++) {
+              const b = blocks[i];
+              const dateStr = b.match(/<p class="day">\s*(.*?)\s*<\/p>/s)?.[1]?.trim() || '';
+              const t1Score = b.match(/class="teamresult team1">\s*<span>([0-9]+)<\/span>/s)?.[1];
+              const t1Name = b.match(/class="teamresult team1">[\s\S]*?<div class="teamName">\s*(.*?)\s*<\/div>/s)?.[1]?.trim();
+              const t2Score = b.match(/class="teamresult team2">\s*<span>([0-9]+)<\/span>/s)?.[1];
+              const t2Name = b.match(/class="teamresult team2">[\s\S]*?<div class="teamName">\s*(.*?)\s*<\/div>/s)?.[1]?.trim();
+              if (t1Name && t2Name && t1Score !== undefined && t2Score !== undefined) {
+                baseDetails.h2h.push({
+                  date: dateStr,
+                  competition: 'مواجهة سابقة',
+                  teamA: t1Name,
+                  teamB: t2Name,
+                  scoreA: parseInt(t1Score, 10) || 0,
+                  scoreB: parseInt(t2Score, 10) || 0
+                });
+              }
+            }
+          }
+        }
+
+        return jsonResponse({ success: true, details: baseDetails }, 200, 20);
       }
 
       // /api/epg/live
