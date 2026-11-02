@@ -1,59 +1,57 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Tv, Shield, FileText, Copyright } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   return (
-    <footer className="mt-16 border-t border-stone-800/80 bg-[#08090c] text-stone-400 text-xs select-none" dir="rtl">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          {/* Brand */}
-          <div className="space-y-2 max-w-md">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-purple-400">
-                <Tv className="w-3.5 h-3.5" />
+    <footer
+      className="mt-14 border-t border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] text-xs select-none"
+      dir="rtl"
+    >
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-5 border-b border-[var(--border-hairline)]">
+          <div className="flex items-center gap-3">
+            <span className="w-1.5 h-6 bg-[var(--accent-primary)] shrink-0" />
+            <div>
+              <div className="font-display-num text-xl font-extrabold uppercase tracking-wider text-[var(--text-primary)] leading-none">
+                KOLSTREAM
               </div>
-              <span className="font-mono-num text-base font-extrabold text-white tracking-tight">
-                kolstream
-              </span>
+              <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                التغطية المباشرة للمباريات، النتائج الفورية، ودليل القنوات الرياضية الناقلة.
+              </p>
             </div>
-            <p className="text-stone-400 text-xs leading-relaxed">
-              دليل القنوات الرياضية المباشرة وجدول مباريات اليوم في البطولات العربية والأوروبية.
-            </p>
           </div>
 
-          {/* Navigation Links */}
-          <div className="flex flex-wrap items-center gap-6 text-xs">
-            <Link to="/home" className="text-stone-300 hover:text-white transition font-medium">
+          <div className="flex flex-wrap items-center gap-5 text-xs">
+            <Link to="/home" className="text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors font-semibold">
               الرئيسية والقنوات
             </Link>
-            <Link to="/schedual" className="text-stone-300 hover:text-white transition font-medium">
-              المباريات والنتائج
+            <Link to="/schedual" className="text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors font-semibold">
+              جدول المباريات
             </Link>
-            <Link to="/leagues" className="text-stone-300 hover:text-white transition font-medium">
-              البطولات والترتيب
+            <Link to="/leagues" className="text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors font-semibold">
+              ترتيب الدوريات
             </Link>
-            <Link to="/watchroom" className="text-stone-300 hover:text-white transition font-medium">
-              غرفة المشاهدة
+            <Link to="/watchroom" className="text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors font-semibold">
+              غرفة البث
             </Link>
-            <Link to="/privacy" className="text-stone-400 hover:text-stone-200 transition flex items-center gap-1">
-              <Shield className="w-3 h-3" />
-              <span>سياسة الخصوصية</span>
+            <span className="text-[var(--border-strong)]">|</span>
+            <Link to="/privacy" className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+              الخصوصية
             </Link>
-            <Link to="/terms" className="text-stone-400 hover:text-stone-200 transition flex items-center gap-1">
-              <FileText className="w-3 h-3" />
-              <span>شروط الاستخدام</span>
+            <Link to="/terms" className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+              الشروط
             </Link>
-            <Link to="/dmca" className="text-stone-400 hover:text-stone-200 transition flex items-center gap-1">
-              <Copyright className="w-3 h-3" />
-              <span>DMCA</span>
+            <Link to="/dmca" className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors font-display-num">
+              DMCA
             </Link>
           </div>
         </div>
 
-        <div className="pt-4 border-t border-stone-800/50 flex flex-col sm:flex-row items-center justify-between gap-2 text-stone-500 text-[11px]">
-          <span>© {new Date().getFullYear()} kolstream. جميع الحقوق محفوظة.</span>
-          <span>البث المباشر للقنوات الرياضية ومواعيد المباريات</span>
+        <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-[var(--text-muted)] text-[11px]">
+          <span className="font-display-num">
+            © {new Date().getFullYear()} KOLSTREAM BROADCAST NETWORK
+          </span>
+          <span>توقيت المباريات والنتائج محدث تلقائياً على مدار الساعة</span>
         </div>
       </div>
     </footer>

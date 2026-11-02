@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Hls from 'hls.js';
-import { Maximize2, X, Volume2, VolumeX, ChevronRight, ChevronLeft, Minimize2, Tv } from 'lucide-react';
+import { Maximize2, X, Volume2, VolumeX, ChevronRight, ChevronLeft, Minimize2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export const MiniPlayerPill: React.FC = () => {
@@ -105,15 +105,14 @@ export const MiniPlayerPill: React.FC = () => {
 
   return (
     <div
-      className="fixed bottom-16 md:bottom-5 left-4 right-4 sm:left-auto sm:right-6 sm:w-80 z-40 animate-in slide-in-from-bottom duration-200 select-none"
+      className="fixed bottom-16 md:bottom-4 left-3 right-3 sm:left-auto sm:right-5 sm:w-80 z-40 select-none"
       dir="rtl"
     >
-      <div className="bg-[#111318]/95 border border-emerald-500/40 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl">
-        {/* Live Mini Video Viewport (when not collapsed) */}
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-strong)] border-r-[3px] border-r-[var(--accent-primary)] rounded-[2px] overflow-hidden">
         {!isMinimizedPill && (
           <div
             onClick={handleReturnToWatchroom}
-            className="relative aspect-video bg-black cursor-pointer group overflow-hidden"
+            className="relative aspect-video bg-black cursor-pointer group overflow-hidden border-b border-[var(--border-hairline)]"
           >
             <video
               ref={videoRef}
@@ -123,48 +122,45 @@ export const MiniPlayerPill: React.FC = () => {
               className="w-full h-full object-contain bg-black"
             />
 
-            {/* Top Corner Status */}
-            <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-md border border-stone-800">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="text-[10px] font-mono-num text-stone-200 font-bold">
-                #{activeStreamingChannel.id}
+            <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-[var(--bg-canvas)] px-2 py-0.5 rounded-[2px] border border-[var(--border-hairline)]">
+              <span className="w-1.5 h-1.5 rounded-full live-dot-pulse" />
+              <span className="text-xs font-display-num text-[var(--text-primary)] font-bold">
+                CH {String(activeStreamingChannel.id).padStart(2, '0')}
               </span>
             </div>
 
-            {/* Quick Controls Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-2.5">
-              <span className="text-[11px] font-bold text-white flex items-center gap-1">
-                <Maximize2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>العودة لغرفة المشاهدة</span>
+            <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-2.5">
+              <span className="text-[11px] font-bold text-[var(--accent-primary)] flex items-center gap-1">
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span>العودة إلى شاشة البث</span>
               </span>
             </div>
           </div>
         )}
 
-        {/* Bottom Control Strip */}
-        <div className="p-2.5 flex items-center justify-between gap-2">
+        <div className="p-2 flex items-center justify-between gap-2 bg-[var(--bg-surface)]">
           <div
             onClick={handleReturnToWatchroom}
             className="flex items-center gap-2 min-w-0 cursor-pointer flex-1"
           >
-            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0 text-emerald-400">
-              <Tv className="w-3.5 h-3.5" />
-            </div>
+            <span className="px-1.5 py-0.5 bg-[var(--bg-canvas)] border border-[var(--border-hairline)] font-display-num text-xs font-extrabold text-[var(--accent-primary)] shrink-0">
+              #{String(activeStreamingChannel.id).padStart(2, '0')}
+            </span>
             <div className="min-w-0">
-              <div className="text-xs font-bold text-stone-100 truncate">
+              <div className="text-xs font-bold text-[var(--text-primary)] truncate">
                 {activeStreamingChannel.arabicName || activeStreamingChannel.name}
               </div>
-              <div className="text-[10px] text-emerald-400 font-medium truncate">
-                مشغل عائم نشط · اضغط للتكبير
+              <div className="text-[10px] text-[var(--text-secondary)] truncate">
+                بث مصغر نشط — اضغط للتكبير
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-0.5 shrink-0">
             <button
               type="button"
               onClick={e => handleStepChannel(e, -1)}
-              className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-stone-800 transition cursor-pointer"
+              className="p-1.5 rounded-[2px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer"
               title="القناة السابقة"
             >
               <ChevronRight className="w-3.5 h-3.5" />
@@ -173,7 +169,7 @@ export const MiniPlayerPill: React.FC = () => {
             <button
               type="button"
               onClick={e => handleStepChannel(e, 1)}
-              className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-stone-800 transition cursor-pointer"
+              className="p-1.5 rounded-[2px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer"
               title="القناة التالية"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
@@ -183,10 +179,10 @@ export const MiniPlayerPill: React.FC = () => {
               <button
                 type="button"
                 onClick={handleToggleMute}
-                className={`p-1.5 rounded-lg transition cursor-pointer ${
+                className={`p-1.5 rounded-[2px] transition-colors cursor-pointer ${
                   isMuted
-                    ? 'bg-emerald-500 text-stone-950'
-                    : 'text-emerald-400 hover:bg-stone-800'
+                    ? 'bg-[var(--signal-live)] text-white'
+                    : 'text-[var(--accent-primary)] hover:bg-[var(--bg-elevated)]'
                 }`}
                 title={isMuted ? 'تشغيل الصوت' : 'كتم الصوت'}
               >
@@ -200,7 +196,7 @@ export const MiniPlayerPill: React.FC = () => {
                 e.stopPropagation();
                 setIsMinimizedPill(prev => !prev);
               }}
-              className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-stone-800 transition cursor-pointer"
+              className="p-1.5 rounded-[2px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer"
               title={isMinimizedPill ? 'إظهار الفيديو المصغر' : 'تصغير الشريط'}
             >
               {isMinimizedPill ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
@@ -209,7 +205,7 @@ export const MiniPlayerPill: React.FC = () => {
             <button
               type="button"
               onClick={handleDismiss}
-              className="p-1.5 rounded-lg text-stone-500 hover:text-rose-400 hover:bg-stone-800 transition cursor-pointer"
+              className="p-1.5 rounded-[2px] text-[var(--text-muted)] hover:text-[var(--signal-live)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer"
               title="إغلاق البث المصغر"
             >
               <X className="w-3.5 h-3.5" />

@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, CheckCircle2, AlertTriangle, ShieldCheck, ChevronLeft } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { usePageSeo } from '../hooks/usePageSeo';
 
@@ -12,70 +12,65 @@ export const TermsPage: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="max-w-4xl mx-auto py-6 sm:py-10 space-y-8 animate-in fade-in duration-200" dir="rtl">
-      {/* Header */}
-      <div className="space-y-3 border-b border-stone-800 pb-6">
+    <div className="max-w-4xl mx-auto py-6 sm:py-10 space-y-6" dir="rtl">
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-hairline)] rounded-[2px] p-5 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="w-1.5 h-8 bg-[var(--accent-primary)] shrink-0" />
+          <div>
+            <h1 className="font-display-ar text-xl sm:text-2xl font-extrabold text-[var(--text-primary)]">
+              شروط الخدمة والاستخدام (Terms of Service)
+            </h1>
+            <p className="text-xs text-[var(--text-muted)] font-display-num">
+              UPDATED · 2026
+            </p>
+          </div>
+        </div>
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-1.5 text-xs text-stone-400 hover:text-emerald-400 transition mb-2"
+          className="px-3 py-1.5 rounded-[2px] bg-[var(--bg-canvas)] border border-[var(--border-hairline)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1.5 cursor-pointer"
         >
-          <ChevronLeft className="w-4 h-4 rotate-180" />
           <span>رجوع</span>
+          <ChevronLeft className="w-3.5 h-3.5" />
         </button>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <FileText className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-stone-100">شروط الخدمة والاستخدام (Terms of Service)</h1>
-            <p className="text-xs sm:text-sm text-stone-400">آخر تحديث: 2026</p>
-          </div>
-        </div>
       </div>
 
-      {/* Sections */}
-      <div className="space-y-6 text-sm text-stone-300 leading-relaxed">
-        <section className="bg-[#121316] border border-stone-800/80 rounded-2xl p-5 sm:p-6 space-y-3">
-          <div className="flex items-center gap-2 text-stone-100 font-bold text-base">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <h2>1. قبول الشروط</h2>
-          </div>
+      <div className="border border-[var(--border-hairline)] divide-y divide-[var(--border-hairline)] bg-[var(--bg-surface)] rounded-[2px] text-sm text-[var(--text-secondary)] leading-relaxed">
+        <section className="p-5 space-y-2">
+          <h2 className="font-display-ar text-base font-extrabold text-[var(--text-primary)]">
+            01. قبول الشروط
+          </h2>
           <p>
-            باستخدامك لمنصة <strong>kolstream</strong>، فإنك توافق التام وغير المشروط على الالتزام بجميع بنود وشروط هذه الاتفاقية وسياسة الخصوصية المرتبطة بها. إذا كنت لا توافق على هذه الشروط، يُرجى التوقف عن استخدام المنصة فوراً.
+            باستخدامك لمنصة <strong className="text-[var(--text-primary)]">kolstream</strong>، فإنك توافق على الالتزام بجميع بنود وشروط هذه الاتفاقية وسياسة الخصوصية المرتبطة بها.
           </p>
         </section>
 
-        <section className="bg-[#121316] border border-stone-800/80 rounded-2xl p-5 sm:p-6 space-y-3">
-          <div className="flex items-center gap-2 text-stone-100 font-bold text-base">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <h2>2. طبيعة الخدمة ودور المنصة</h2>
-          </div>
+        <section className="p-5 space-y-2">
+          <h2 className="font-display-ar text-base font-extrabold text-[var(--text-primary)]">
+            02. طبيعة الخدمة ودور المنصة
+          </h2>
           <p>
-            منصة <strong>kolstream</strong> هي منصة استعراض وفهرسة برمجية تهدف إلى تنظيم وتسهيل الوصول إلى جداول البث الرياضي ومعلومات المباريات والقنوات المتاحة علناً عبر شبكة الإنترنت. المنصة لا تقدم خدمات استضافة ملفات فيديو أو بثاً مباشراً تجارياً على خوادمها الخاصة.
+            منصة <strong className="text-[var(--text-primary)]">kolstream</strong> هي منصة استعراض وفهرسة برمجية تهدف إلى تنظيم وتسهيل الوصول إلى جداول البث الرياضي ومعلومات المباريات والقنوات المتاحة علناً عبر شبكة الإنترنت.
           </p>
         </section>
 
-        <section className="bg-[#121316] border border-stone-800/80 rounded-2xl p-5 sm:p-6 space-y-3">
-          <div className="flex items-center gap-2 text-stone-100 font-bold text-base">
-            <AlertTriangle className="w-4 h-4 text-amber-400" />
-            <h2>3. الاستخدام العادل والمحظورات</h2>
-          </div>
-          <p>يلتزم المستخدم بما يلي:</p>
-          <ul className="list-disc list-inside space-y-1.5 text-xs text-stone-400 pr-2">
-            <li>عدم محاولة إلحاق الضرر بالبنية التحتية للمنصة أو تنفيذ هجمات حرمان من الخدمة (DDoS).</li>
+        <section className="p-5 space-y-2">
+          <h2 className="font-display-ar text-base font-extrabold text-[var(--text-primary)]">
+            03. الاستخدام العادل والمحظورات
+          </h2>
+          <ul className="list-disc list-inside space-y-1 text-xs text-[var(--text-muted)] pr-2">
+            <li>عدم محاولة إلحاق الضرر بالبنية التحتية للمنصة أو تنفيذ هجمات حرمان من الخدمة.</li>
             <li>استخدام المنصة للأغراض الشخصية وغير التجارية فقط.</li>
-            <li>عدم إعادة بث أو تضمين محتوى المنصة في تطبيقات تجارية دون إذن كتابي مسبق.</li>
+            <li>عدم إعادة بث أو تضمين محتوى المنصة في تطبيقات تجارية دون إذن مسبق.</li>
           </ul>
         </section>
 
-        <section className="bg-[#121316] border border-stone-800/80 rounded-2xl p-5 sm:p-6 space-y-3">
-          <div className="flex items-center gap-2 text-stone-100 font-bold text-base">
-            <AlertTriangle className="w-4 h-4 text-stone-400" />
-            <h2>4. حدود المسؤولية (Limitation of Liability)</h2>
-          </div>
-          <p className="text-xs text-stone-400">
-            تُقدَّم الخدمة "كما هي" دون أي ضمانات صريحة أو ضمنية بخصوص استمرارية البث، خلوه من الانقطاعات المؤقتة، أو توافر القنوات في جميع المناطق الجغرافية. لا تتحمل المنصة أي مسؤولية عن انقطاع الاتصال أو جودة الشبكة لدى مزودي خدمات الإنترنت.
+        <section className="p-5 space-y-2">
+          <h2 className="font-display-ar text-base font-extrabold text-[var(--text-primary)]">
+            04. حدود المسؤولية
+          </h2>
+          <p className="text-xs text-[var(--text-muted)]">
+            تُقدَّم الخدمة "كما هي" دون أي ضمانات بخصوص استمرارية البث أو خلوه من الانقطاعات المؤقتة لدى مزودي خدمات الإنترنت.
           </p>
         </section>
       </div>

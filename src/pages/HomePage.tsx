@@ -3,11 +3,6 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Search,
   Play,
-  AlertCircle,
-  Tv,
-  Trophy,
-  Calendar,
-  Radio,
   ArrowUpDown,
   ChevronDown
 } from 'lucide-react';
@@ -15,10 +10,14 @@ import { useApp } from '../context/AppContext';
 import { Channel } from '../types';
 import { usePageSeo } from '../hooks/usePageSeo';
 import { getChannelBrandIdentity } from '../utils/channelBranding';
+import {
+  getKickoffCountdown,
+  formatBroadcastMinute
+} from '../utils/broadcastFormatters';
 
 type ChannelSortOption = 'default' | 'live_first' | 'id_asc' | 'name_asc';
 
-const BATCH_SIZE = 12;
+const BATCH_SIZE = 18;
 
 export const HomePage: React.FC = () => {
   usePageSeo({
@@ -50,8 +49,14 @@ export const HomePage: React.FC = () => {
   );
   const [visibleCount, setVisibleCount] = useState<number>(BATCH_SIZE);
   const [selectedHeroIndex, setSelectedHeroIndex] = useState<number>(0);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
 
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (rawCategory !== category) setCategory(rawCategory);
@@ -61,12 +66,10 @@ export const HomePage: React.FC = () => {
     if (rawSearch !== searchQuery) setSearchQuery(rawSearch);
   }, [rawSearch, searchQuery]);
 
-  // Reset visibleCount when filters or sorting change
   useEffect(() => {
     setVisibleCount(BATCH_SIZE);
   }, [category, searchQuery, sortBy]);
 
-  // Channels that currently have a live match on air
   const liveBroadcastingChannelIds = useMemo(() => {
     const ids = new Set<number>();
     for (const match of matches) {
@@ -79,17 +82,16 @@ export const HomePage: React.FC = () => {
     return ids;
   }, [matches]);
 
-  // Featured Match of Today (prioritizing LIVE matches, then top upcoming matches)
   const spotlightMatches = useMemo(() => {
     if (!matches || matches.length === 0) return [];
     const liveOnes = matches.filter(m => m.status === 'LIVE');
-    const upcomingOnes = matches.filter(m => m.status !== 'LIVE');
-    return [...liveOnes, ...upcomingOnes].slice(0, 5);
+    const upcomingOnes = matches.filter(m => m.status === 'FIXTURE');
+    const finishedOnes = matches.filter(m => m.status === 'RESULT');
+    return [...liveOnes, ...upcomingOnes, ...finishedOnes].slice(0, 6);
   }, [matches]);
 
   const activeHeroMatch = spotlightMatches[selectedHeroIndex] || spotlightMatches[0] || null;
 
-  // Filter & Sort channels
   const filteredChannels = useMemo(() => {
     let list = [...channels];
 
@@ -129,7 +131,6 @@ export const HomePage: React.FC = () => {
       });
     }
 
-    // Apply Sorting
     if (sortBy === 'live_first') {
       list.sort((a, b) => {
         const aLive = liveBroadcastingChannelIds.has(a.id) ? 2 : getChannelBroadcast(a.id)?.isMatch ? 1 : 0;
@@ -148,14 +149,12 @@ export const HomePage: React.FC = () => {
     return list;
   }, [channels, category, searchQuery, sortBy, liveBroadcastingChannelIds, getChannelBroadcast]);
 
-  // Slice visible channels for Infinite Scroll
   const visibleChannels = useMemo(() => {
     return filteredChannels.slice(0, visibleCount);
   }, [filteredChannels, visibleCount]);
 
   const hasMoreChannels = visibleCount < filteredChannels.length;
 
-  // IntersectionObserver for automatic load-more while scrolling
   useEffect(() => {
     const sentinel = loadMoreSentinelRef.current;
     if (!sentinel || !hasMoreChannels) return;
@@ -212,106 +211,149 @@ export const HomePage: React.FC = () => {
     navigate(`/watchroom/${channel.id}`);
   };
 
+  const heroCountdown = activeHeroMatch
+    ? getKickoffCountdown(activeHeroMatch.time, activeHeroMatch.status, nowMs)
+    : null;
+
   return (
-    <div className="space-y-8 animate-in fade-in duration-300" dir="rtl">
-      {/* 1. Featured Match of Today Hero */}
+    <div className="space-y-8" dir="rtl">
+      {/* 1. ASYMMETRIC BROADCAST SCOREBOARD: OVERSIZED FEATURED MATCH (8 COLS) + DENSE MATCHDAY TICKER (4 COLS) */}
       {activeHeroMatch ? (
         <section
-          aria-label="مباراة اليوم الأبرز"
-          className="relative overflow-hidden rounded-3xl border border-purple-500/30 bg-gradient-to-br from-[#1d0738] via-[#11131c] to-[#080a0f] p-5 sm:p-8 shadow-2xl"
+          aria-label="لوحة مباريات اليوم"
+          className="grid grid-cols-1 lg:grid-cols-12 border border-[var(--border-hairline)] bg-[var(--bg-surface)] rounded-2xl overflow-hidden shadow-xl shadow-black/20"
         >
-          <div className="relative z-10 space-y-6">
-            {/* Top Bar: Tournament & Match Time/Status */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="px-3 py-1 rounded-lg bg-purple-600 text-white text-xs font-extrabold flex items-center gap-1.5">
-                  <Trophy className="w-3.5 h-3.5" />
-                  <span>قمة مباريات اليوم</span>
+          {/* Oversized Featured Match Scoreboard (8 cols) */}
+          <div className="lg:col-span-8 flex flex-col justify-between border-b lg:border-b-0 lg:border-l border-[var(--border-hairline)]">
+            {/* Top Broadcast Strip */}
+            <div className="px-5 py-3 bg-[var(--bg-elevated)]/90 border-b border-[var(--border-hairline)] flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <span className="px-2.5 py-0.5 rounded-full bg-[var(--accent-primary)] text-[var(--accent-contrast)] font-display-ar text-[11px] font-extrabold uppercase">
+                  مباراة القمة
                 </span>
-                <span className="text-xs sm:text-sm font-bold text-stone-200">
+                <span className="font-display-ar text-xs sm:text-sm font-bold text-[var(--text-primary)]">
                   {activeHeroMatch.competition}
                 </span>
                 {activeHeroMatch.commentator && (
-                  <span className="text-xs text-stone-400 hidden sm:inline">
-                    · المعلق: {activeHeroMatch.commentator}
+                  <span className="text-[11px] text-[var(--text-secondary)] hidden sm:inline">
+                    | تعليق: {activeHeroMatch.commentator}
                   </span>
                 )}
               </div>
 
-              {activeHeroMatch.status === 'LIVE' ? (
-                <span className="px-3 py-1 rounded-lg bg-rose-600 text-white font-mono-num text-xs font-extrabold">
-                  مباشر الآن · {activeHeroMatch.minute || 'الشوط الحالي'}
-                </span>
-              ) : (
-                <span className="px-3 py-1 rounded-lg bg-stone-900/90 border border-stone-700/80 text-stone-200 font-mono-num text-xs font-bold">
-                  موعد الانطلاق: {activeHeroMatch.time}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {activeHeroMatch.status === 'LIVE' ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--signal-live)] text-white font-display-num text-xs font-black tracking-wide shadow-sm">
+                    <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                    <span>LIVE · {formatBroadcastMinute(activeHeroMatch.minute)}</span>
+                  </span>
+                ) : activeHeroMatch.status === 'RESULT' ? (
+                  <span className="px-2.5 py-0.5 rounded-md bg-[var(--bg-canvas)] border border-[var(--border-hairline)] text-[var(--text-muted)] font-display-ar text-[11px] font-bold">
+                    انتهت المباراة (FT)
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    {heroCountdown && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-strong)] text-[var(--accent-primary)] font-display-num text-xs font-bold">
+                        {heroCountdown}
+                      </span>
+                    )}
+                    <span className="font-display-num text-sm font-bold text-[var(--text-secondary)]">
+                      KO {activeHeroMatch.time}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Scoreboard & Watch CTA */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-              {/* Teams & Score (8 cols) */}
-              <div className="lg:col-span-8 rounded-2xl bg-black/45 border border-white/10 p-4 sm:p-6 flex items-center justify-between gap-3 sm:gap-6 backdrop-blur-md">
-                {/* Team A */}
-                <div className="flex flex-col sm:flex-row items-center gap-3 flex-1 text-center sm:text-right">
+            {/* Main Oversized Scoreboard Chamber */}
+            <div className="p-4 sm:p-7 md:p-8 bg-gradient-to-b from-[var(--bg-canvas)] to-[var(--bg-surface)] flex-1 flex flex-col justify-center">
+              <div className="grid grid-cols-12 items-center gap-2 sm:gap-4 md:gap-6">
+                {/* Team A (Home) - 4 cols on mobile, 4.5 cols on sm+ */}
+                <div className="col-span-4 sm:col-span-4 lg:col-span-4 flex flex-col sm:flex-row items-center sm:items-center text-center sm:text-right gap-1.5 sm:gap-3.5 min-w-0">
                   {activeHeroMatch.teamA.logo ? (
                     <img
                       src={activeHeroMatch.teamA.logo}
                       alt={activeHeroMatch.teamA.name}
-                      className="w-12 h-12 sm:w-16 sm:h-16 object-contain drop-shadow-md shrink-0"
+                      className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5 shrink-0"
                     />
                   ) : (
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-purple-600/20 border border-purple-500/40 text-purple-300 flex items-center justify-center text-lg sm:text-xl font-extrabold shrink-0">
+                    <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-strong)] flex items-center justify-center font-display-ar text-sm sm:text-base font-extrabold text-[var(--text-primary)] shrink-0">
                       {activeHeroMatch.teamA.name.slice(0, 2)}
                     </div>
                   )}
-                  <div className="min-w-0">
-                    <div className="text-sm sm:text-xl font-extrabold text-white truncate">
+                  <div className="min-w-0 w-full sm:flex-1">
+                    <div
+                      title={activeHeroMatch.teamA.name}
+                      className="font-display-ar text-xs sm:text-base md:text-xl lg:text-2xl font-extrabold text-[var(--text-primary)] leading-snug sm:leading-tight line-clamp-2 break-words"
+                    >
                       {activeHeroMatch.teamA.name}
+                    </div>
+                    <div className="hidden sm:block text-[11px] text-[var(--text-muted)] mt-0.5">
+                      صاحب الأرض
                     </div>
                   </div>
                 </div>
 
-                {/* Score / Time */}
-                <div className="flex flex-col items-center justify-center shrink-0 px-4 sm:px-6 py-2.5 rounded-2xl bg-stone-900/90 border border-stone-700/80">
+                {/* Huge Tabular Score / Kickoff Time (4 cols on mobile, 3 sm, 4 lg) */}
+                <div className="col-span-4 sm:col-span-4 lg:col-span-4 flex flex-col items-center justify-center py-2 px-1.5 sm:py-3 sm:px-3 rounded-xl sm:rounded-2xl bg-[var(--bg-canvas)]/90 border border-[var(--border-hairline)] shadow-inner">
                   {activeHeroMatch.scoreA !== null && activeHeroMatch.scoreB !== null ? (
-                    <div className="text-xl sm:text-3xl font-mono-num font-black tracking-wider text-emerald-400">
-                      {activeHeroMatch.scoreA} : {activeHeroMatch.scoreB}
+                    <div
+                      className={`font-display-num text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black leading-none tracking-tight ${
+                        activeHeroMatch.status === 'LIVE'
+                          ? 'text-[var(--signal-live)]'
+                          : 'text-[var(--accent-primary)]'
+                      }`}
+                    >
+                      {activeHeroMatch.scoreA}
+                      <span className="text-[var(--text-muted)] mx-0.5 sm:mx-1">:</span>
+                      {activeHeroMatch.scoreB}
                     </div>
                   ) : (
-                    <div className="text-base sm:text-xl font-mono-num font-extrabold text-white">
+                    <div className="font-display-num text-xl sm:text-3xl md:text-4xl lg:text-5xl font-black leading-none text-[var(--text-primary)]">
                       {activeHeroMatch.time}
                     </div>
                   )}
-                  <span className="text-[10px] text-stone-400 mt-0.5">
-                    {activeHeroMatch.status === 'LIVE' ? 'النتيجة الحالية' : 'بتوقيت مكة'}
+                  <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mt-1 text-center">
+                    {activeHeroMatch.status === 'LIVE'
+                      ? 'النتيجة المباشرة'
+                      : activeHeroMatch.status === 'RESULT'
+                      ? 'النتيجة النهائية'
+                      : 'توقيت مكة'}
                   </span>
                 </div>
 
-                {/* Team B */}
-                <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-3 flex-1 text-center sm:text-left">
-                  <div className="min-w-0">
-                    <div className="text-sm sm:text-xl font-extrabold text-white truncate">
+                {/* Team B (Away) - 4 cols on mobile, 4 sm */}
+                <div className="col-span-4 sm:col-span-4 lg:col-span-4 flex flex-col-reverse sm:flex-row items-center sm:items-center text-center sm:text-left gap-1.5 sm:gap-3.5 min-w-0">
+                  <div className="min-w-0 w-full sm:flex-1 text-center sm:text-left">
+                    <div
+                      title={activeHeroMatch.teamB.name}
+                      className="font-display-ar text-xs sm:text-base md:text-xl lg:text-2xl font-extrabold text-[var(--text-primary)] leading-snug sm:leading-tight line-clamp-2 break-words"
+                    >
                       {activeHeroMatch.teamB.name}
+                    </div>
+                    <div className="hidden sm:block text-[11px] text-[var(--text-muted)] mt-0.5">
+                      الفريق الضيف
                     </div>
                   </div>
                   {activeHeroMatch.teamB.logo ? (
                     <img
                       src={activeHeroMatch.teamB.logo}
                       alt={activeHeroMatch.teamB.name}
-                      className="w-12 h-12 sm:w-16 sm:h-16 object-contain drop-shadow-md shrink-0"
+                      className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5 shrink-0"
                     />
                   ) : (
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-purple-600/20 border border-purple-500/40 text-purple-300 flex items-center justify-center text-lg sm:text-xl font-extrabold shrink-0">
+                    <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-strong)] flex items-center justify-center font-display-ar text-sm sm:text-base font-extrabold text-[var(--text-primary)] shrink-0">
                       {activeHeroMatch.teamB.name.slice(0, 2)}
                     </div>
                   )}
                 </div>
               </div>
+            </div>
 
-              {/* Primary CTA (4 cols) */}
-              <div className="lg:col-span-4 flex flex-col gap-2.5">
+            {/* Bottom Action Bar */}
+            <div className="px-5 py-3.5 bg-[var(--bg-surface)] border-t border-[var(--border-hairline)] flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-wrap">
                 {activeHeroMatch.channels && activeHeroMatch.channels.length > 0 ? (
                   <button
                     type="button"
@@ -327,10 +369,10 @@ export const HomePage: React.FC = () => {
                       };
                       handleTuneIn(chFound);
                     }}
-                    className="w-full py-3.5 px-5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-extrabold text-sm flex items-center justify-center gap-2.5 shadow-lg transition cursor-pointer"
+                    className="px-5 py-2.5 rounded-xl bg-[var(--accent-primary)] hover:brightness-110 text-[var(--accent-contrast)] font-extrabold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-md"
                   >
-                    <Play className="w-4 h-4 fill-current" />
-                    <span>مشاهدة عبر {activeHeroMatch.channels[0].channel_name}</span>
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>بث مباشر · {activeHeroMatch.channels[0].channel_name}</span>
                   </button>
                 ) : (
                   <button
@@ -338,129 +380,238 @@ export const HomePage: React.FC = () => {
                     onClick={() => {
                       if (channels[0]) handleTuneIn(channels[0]);
                     }}
-                    className="w-full py-3.5 px-5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+                    className="px-5 py-2.5 rounded-xl bg-[var(--accent-primary)] hover:brightness-110 text-[var(--accent-contrast)] font-extrabold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-md"
                   >
-                    <Play className="w-4 h-4 fill-current" />
-                    <span>فتح البث المباشر</span>
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>انتقل إلى البث المباشر</span>
                   </button>
                 )}
 
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => navigate('/schedual')}
-                    className="py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-stone-200 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
-                  >
-                    <Calendar className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                    <span className="truncate">جدول المباريات</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/leagues')}
-                    className="py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-stone-200 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
-                  >
-                    <Trophy className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span className="truncate">ترتيب الدوريات</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/schedual')}
+                  className="px-4 py-2.5 rounded-xl bg-[var(--bg-canvas)] hover:bg-[var(--bg-elevated)] border border-[var(--border-hairline)] text-[var(--text-primary)] text-xs font-bold transition-all cursor-pointer"
+                >
+                  جميع مباريات اليوم ({matches.length})
+                </button>
               </div>
+
+              <button
+                type="button"
+                onClick={() => navigate('/leagues')}
+                className="text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors cursor-pointer"
+              >
+                جداول ترتيب الدوريات ←
+              </button>
+            </div>
+          </div>
+
+          {/* Matchday Ticker (4 cols) */}
+          <div className="lg:col-span-4 flex flex-col justify-between bg-[var(--bg-surface)]">
+            <div className="px-4 py-3 bg-[var(--bg-elevated)]/90 border-b border-[var(--border-hairline)] flex items-center justify-between">
+              <span className="font-display-ar text-xs font-extrabold text-[var(--text-primary)]">
+                أبرز مواجهات اليوم
+              </span>
+              <span className="font-display-num text-xs font-bold text-[var(--text-muted)] tracking-wider">
+                MATCHDAY FEED
+              </span>
             </div>
 
-            {/* Other Featured Matches Switcher */}
-            {spotlightMatches.length > 1 && (
-              <div className="pt-3 border-t border-white/10 flex items-center gap-2 overflow-x-auto no-scrollbar">
-                <span className="text-[11px] font-bold text-stone-400 shrink-0 pl-1">
-                  مباريات أخرى اليوم:
-                </span>
-                {spotlightMatches.map((m, idx) => {
-                  const isCurrent = idx === selectedHeroIndex;
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setSelectedHeroIndex(idx)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 flex items-center gap-2 transition cursor-pointer border ${
-                        isCurrent
-                          ? 'bg-purple-600/30 border-purple-400 text-white'
-                          : 'bg-black/40 border-white/10 text-stone-300 hover:text-white'
-                      }`}
-                    >
-                      <span className="truncate max-w-[180px]">
-                        {m.teamA.name} ضد {m.teamB.name}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <div className="divide-y divide-[var(--border-hairline)] flex-1 overflow-y-auto max-h-[360px] no-scrollbar">
+              {spotlightMatches.map((m, idx) => {
+                const isSelected = idx === selectedHeroIndex;
+                const isLive = m.status === 'LIVE';
+                const cd = getKickoffCountdown(m.time, m.status, nowMs);
+                const hasScore = m.scoreA !== null && m.scoreB !== null;
+
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setSelectedHeroIndex(idx)}
+                    className={`w-full px-4 text-right transition-all flex items-center justify-between gap-2.5 cursor-pointer ${
+                      isLive ? 'py-3.5' : 'py-3'
+                    } ${
+                      isSelected
+                        ? 'bg-[var(--bg-elevated)] border-r-2 border-r-[var(--accent-primary)]'
+                        : isLive
+                        ? 'bg-[var(--bg-surface)] hover:bg-[var(--bg-row-hover)] border-r-2 border-r-[var(--signal-live)]'
+                        : 'bg-[var(--bg-surface)] hover:bg-[var(--bg-row-hover)] border-r-2 border-r-transparent'
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)] mb-1">
+                        <span className="truncate">{m.competition}</span>
+                        {cd && (
+                          <span className="font-display-num text-[10px] text-[var(--accent-primary)] font-bold shrink-0">
+                            · {cd}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* 2-tier team rows for optimal space for big club names */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            {m.teamA.logo ? (
+                              <img
+                                src={m.teamA.logo}
+                                alt=""
+                                className="w-3.5 h-3.5 object-contain rounded-full shrink-0 bg-[var(--bg-canvas)]"
+                              />
+                            ) : (
+                              <span className="w-3.5 h-3.5 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-hairline)] text-[8px] flex items-center justify-center font-bold text-[var(--text-muted)] shrink-0">
+                                {m.teamA.name.slice(0, 1)}
+                              </span>
+                            )}
+                            <span
+                              className="text-xs font-bold text-[var(--text-primary)] truncate"
+                              title={m.teamA.name}
+                            >
+                              {m.teamA.name}
+                            </span>
+                          </div>
+                          {hasScore && (
+                            <span
+                              className={`font-display-num text-xs font-black shrink-0 ${
+                                isLive ? 'text-[var(--signal-live)]' : 'text-[var(--text-primary)]'
+                              }`}
+                            >
+                              {m.scoreA}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            {m.teamB.logo ? (
+                              <img
+                                src={m.teamB.logo}
+                                alt=""
+                                className="w-3.5 h-3.5 object-contain rounded-full shrink-0 bg-[var(--bg-canvas)]"
+                              />
+                            ) : (
+                              <span className="w-3.5 h-3.5 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-hairline)] text-[8px] flex items-center justify-center font-bold text-[var(--text-muted)] shrink-0">
+                                {m.teamB.name.slice(0, 1)}
+                              </span>
+                            )}
+                            <span
+                              className="text-xs font-bold text-[var(--text-primary)] truncate"
+                              title={m.teamB.name}
+                            >
+                              {m.teamB.name}
+                            </span>
+                          </div>
+                          {hasScore && (
+                            <span
+                              className={`font-display-num text-xs font-black shrink-0 ${
+                                isLive ? 'text-[var(--signal-live)]' : 'text-[var(--text-primary)]'
+                              }`}
+                            >
+                              {m.scoreB}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 text-left flex flex-col items-end justify-center pl-1">
+                      {isLive ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[var(--signal-live)]/15 text-[var(--signal-live)] border border-[var(--signal-live)]/20 font-display-num text-[11px] font-bold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[var(--signal-live)] animate-ping" />
+                            <span>LIVE</span>
+                          </span>
+                          <span className="font-display-num text-xs font-bold text-[var(--signal-live)]">
+                            {formatBroadcastMinute(m.minute)}
+                          </span>
+                        </div>
+                      ) : hasScore ? (
+                        <span className="px-1.5 py-0.5 rounded bg-[var(--bg-canvas)] border border-[var(--border-hairline)] text-[10px] font-bold text-[var(--text-muted)]">
+                          FT
+                        </span>
+                      ) : (
+                        <span className="font-display-num text-xs font-bold text-[var(--text-secondary)]">
+                          {m.time}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </section>
       ) : null}
 
-      {/* 2. Channel Catalog Section Header, Sorting & Network Filter Bar */}
-      <section className="space-y-5">
-        <div className="bg-[#101218] border border-stone-800/80 rounded-2xl p-4 sm:p-5 space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
-                <Tv className="w-5 h-5 text-purple-400" />
-                <span>دليل القنوات الرياضية</span>
-                <span className="text-xs font-mono-num font-bold text-stone-400">
-                  ({filteredChannels.length} قناة)
-                </span>
-              </h1>
-              <p className="text-xs text-stone-400 mt-1">
-                تصفح الشبكات الرياضية أو رتب القنوات حسب البث المباشر الحالي
-              </p>
+      {/* 2. BROADCAST CHANNEL MATRIX */}
+      <section className="space-y-4">
+        {/* Matrix Control Header */}
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-hairline)] rounded-2xl overflow-hidden shadow-lg shadow-black/10">
+          <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--border-hairline)]">
+            <div className="flex items-center gap-3">
+              <span className="w-1.5 h-8 rounded-full bg-[var(--accent-primary)] shrink-0" />
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <h1 className="font-display-ar text-lg sm:text-xl font-extrabold text-[var(--text-primary)]">
+                    شبكة القنوات الرياضية المباشرة
+                  </h1>
+                  <span className="px-2.5 py-0.5 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-hairline)] font-display-num text-xs sm:text-sm font-bold text-[var(--accent-primary)]">
+                    {filteredChannels.length} CH
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                  اختر القناة للانتقال الفوري إلى غرفة البث المباشر مع التبديل بين مشغلات مستقرة
+                </p>
+              </div>
             </div>
 
             {/* Search & Sort Controls */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-              {/* Sort Select */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <div className="relative">
-                <ArrowUpDown className="w-3.5 h-3.5 text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <ArrowUpDown className="w-3.5 h-3.5 text-[var(--accent-primary)] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <select
                   value={sortBy}
                   onChange={e => handleSortChange(e.target.value as ChannelSortOption)}
                   aria-label="ترتيب القنوات"
-                  className="w-full sm:w-auto rounded-xl bg-[#090b0f] border border-stone-800 pr-8 pl-4 py-2.5 text-xs font-bold text-stone-200 focus:outline-none focus:border-purple-500 transition cursor-pointer"
+                  className="w-full sm:w-auto rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-hairline)] pr-8 pl-3 py-2 text-xs font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] transition-all cursor-pointer"
                 >
-                  <option value="default">الترتيب: الافتراضي (الأشهر)</option>
-                  <option value="live_first">الترتيب: يبث مباريات الآن أولاً</option>
+                  <option value="default">الترتيب: القنوات الرئيسية</option>
+                  <option value="live_first">الترتيب: تنقل مباريات الآن</option>
                   <option value="name_asc">الترتيب: الأبجدي (أ - ي)</option>
-                  <option value="id_asc">الترتيب: حسب رقم القناة</option>
+                  <option value="id_asc">الترتيب: رقم القناة</option>
                 </select>
               </div>
 
-              {/* Search Input */}
               <div className="relative w-full sm:w-64">
-                <Search className="w-4 h-4 text-stone-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={e => handleSearchChange(e.target.value)}
                   placeholder="ابحث عن قناة (beIN 1, Eurosport...)"
-                  className="w-full rounded-xl bg-[#090b0f] border border-stone-800 pr-10 pl-4 py-2.5 text-xs text-white placeholder-stone-500 focus:outline-none focus:border-purple-500 transition"
+                  className="w-full rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-hairline)] pr-9 pl-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] transition-all"
                 />
               </div>
             </div>
           </div>
 
-          {/* Network Filter Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs pt-2 border-t border-stone-800/60">
+          {/* Network Filter Pills */}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar p-3 bg-[var(--bg-canvas)]/60">
             {[
-              { id: 'all', label: 'جميع القنوات' },
+              { id: 'all', label: 'جميع الشبكات' },
               ...(liveBroadcastingChannelIds.size > 0
                 ? [
                     {
                       id: 'live_now',
-                      label: `قنوات تنقل مباريات الآن (${liveBroadcastingChannelIds.size})`
+                      label: `قنوات تنقل الآن (${liveBroadcastingChannelIds.size})`,
+                      isLive: true
                     }
                   ]
                 : []),
               { id: 'bein_ar', label: 'beIN Sports العربية' },
-              { id: 'bein_global', label: 'beIN Sports العالمية (EN / FR)' },
-              { id: 'euro', label: 'Eurosport والقنوات الأوروبية' }
+              { id: 'bein_global', label: 'beIN Sports الدولية' },
+              { id: 'euro', label: 'القنوات الأوروبية' }
             ].map(cat => {
               const active = category === cat.id;
               return (
@@ -468,41 +619,42 @@ export const HomePage: React.FC = () => {
                   key={cat.id}
                   type="button"
                   onClick={() => handleCategoryChange(cat.id)}
-                  className={`px-4 py-2 rounded-xl whitespace-nowrap transition-all border shrink-0 cursor-pointer ${
+                  className={`px-3.5 py-1.5 rounded-full text-xs whitespace-nowrap transition-all shrink-0 cursor-pointer flex items-center gap-2 border ${
                     active
-                      ? 'bg-emerald-500 text-stone-950 border-emerald-400 font-extrabold shadow-sm'
-                      : 'bg-[#090b0f] border-stone-800 text-stone-300 hover:text-white font-medium'
+                      ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--accent-contrast)] font-extrabold shadow-sm'
+                      : 'border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-semibold hover:border-[var(--border-strong)]'
                   }`}
                 >
-                  {cat.label}
+                  {'isLive' in cat && cat.isLive && (
+                    <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-[var(--accent-contrast)]' : 'live-dot-pulse'}`} />
+                  )}
+                  <span>{cat.label}</span>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* 3. Infinite-Scroll Branded Channel Cards Grid */}
+        {/* Refined Channel Cards Grid */}
         {loadingChannels ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {Array.from({ length: 12 }).map((_, idx) => (
               <div
                 key={idx}
-                className="rounded-2xl border border-stone-800 bg-[#101218] overflow-hidden animate-pulse h-60"
-              >
-                <div className="h-32 bg-stone-800/60" />
-                <div className="p-4 space-y-2.5">
-                  <div className="h-4 w-2/3 bg-stone-800 rounded" />
-                  <div className="h-3 w-1/2 bg-stone-800/60 rounded" />
-                </div>
-              </div>
+                className="h-24 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] animate-pulse p-4"
+              />
             ))}
           </div>
         ) : filteredChannels.length === 0 ? (
-          <div className="py-16 text-center border border-dashed border-stone-800 bg-[#101218] rounded-3xl p-8 space-y-3">
-            <AlertCircle className="w-8 h-8 text-stone-400 mx-auto" />
-            <div className="text-sm font-bold text-white">لا توجد قنوات تطابق بحثك</div>
-            <p className="text-xs text-stone-400 max-w-sm mx-auto">
-              جرب البحث باسم آخر أو عرض جميع الشبكات الرياضية.
+          <div className="py-14 text-center border border-[var(--border-hairline)] bg-[var(--bg-surface)] rounded-2xl p-8 space-y-3 shadow-md">
+            <div className="font-display-num text-2xl font-extrabold text-[var(--text-muted)]">
+              NO FEED MATCHED
+            </div>
+            <div className="text-sm font-bold text-[var(--text-primary)]">
+              لا توجد قناة مطابقة لعبارة البحث الحالية
+            </div>
+            <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
+              تحقق من اسم القناة أو أعد ضبط التصفية لعرض جميع القنوات العاملة.
             </p>
             <button
               type="button"
@@ -510,14 +662,14 @@ export const HomePage: React.FC = () => {
                 handleSearchChange('');
                 handleCategoryChange('all');
               }}
-              className="px-4 py-2 rounded-xl bg-emerald-500 text-stone-950 text-xs font-extrabold transition cursor-pointer"
+              className="px-4 py-2 rounded-xl bg-[var(--accent-primary)] text-[var(--accent-contrast)] text-xs font-extrabold transition-all cursor-pointer"
             >
-              عرض جميع القنوات
+              إظهار جميع القنوات
             </button>
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {visibleChannels.map(channel => {
                 const broadcast = getChannelBroadcast(channel.id);
                 const isMatch = Boolean(broadcast?.isMatch && broadcast?.match);
@@ -529,106 +681,103 @@ export const HomePage: React.FC = () => {
                   <div
                     key={channel.id}
                     onClick={() => handleTuneIn(channel)}
-                    className="group rounded-2xl border border-stone-800/90 hover:border-stone-600 bg-[#101218] overflow-hidden flex flex-col justify-between cursor-pointer transition-all duration-200 hover:-translate-y-0.5 shadow-lg"
+                    className={`group rounded-2xl border bg-[var(--bg-surface)] hover:bg-[var(--bg-row-hover)] transition-all cursor-pointer flex items-stretch justify-between overflow-hidden shadow-sm hover:shadow-md ${
+                      isLiveNow
+                        ? 'border-[var(--signal-live)]/40 hover:border-[var(--signal-live)]'
+                        : 'border-[var(--border-hairline)] hover:border-[var(--accent-primary)]/40'
+                    }`}
                   >
-                    {/* Network-Branded Visual Artwork Header */}
-                    <div
-                      className="relative h-36 p-4 flex flex-col justify-between text-white overflow-hidden bg-cover bg-center"
-                      style={{
-                        backgroundImage: `${brand.svgPatternUrl}, ${brand.backgroundCss}`
-                      }}
-                    >
-                      {/* Top Row: Official Network Badge & Live Status */}
-                      <div className="relative z-10 flex items-center justify-between gap-2">
-                        <span
-                          className={`text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-md font-extrabold shadow-sm ${brand.badgeBg}`}
-                        >
-                          {brand.badgeText}
-                        </span>
+                    {/* Left/Start Call-Sign Number Box */}
+                    <div className="w-16 sm:w-20 bg-[var(--bg-canvas)]/80 group-hover:bg-[var(--bg-elevated)] border-l border-[var(--border-hairline)] flex flex-col items-center justify-center px-2 py-3.5 shrink-0 transition-colors">
+                      <span className="font-display-num text-xl sm:text-2xl font-black text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] leading-none">
+                        {String(channel.id).padStart(2, '0')}
+                      </span>
+                      <span className="font-display-num text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mt-1">
+                        {brand.badgeText}
+                      </span>
+                    </div>
+
+                    {/* Center Channel Info & Current Broadcast */}
+                    <div className="p-3.5 flex-1 min-w-0 flex flex-col justify-between gap-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-display-ar text-sm sm:text-base font-extrabold text-[var(--text-primary)] truncate">
+                          {channel.arabicName || channel.name}
+                        </h3>
 
                         {isLiveNow ? (
-                          <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white font-mono-num text-[10px] font-extrabold">
-                            مباراة مباشرة
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--signal-live)] text-white font-display-num text-[11px] font-extrabold shrink-0 shadow-sm">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                            <span>LIVE</span>
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-md bg-black/45 backdrop-blur-xs border border-white/15 text-white/90 font-mono-num text-[10px] font-bold">
-                            {channel.quality || '1080p FHD'}
+                          <span className="font-display-num text-[11px] font-bold text-[var(--text-muted)] px-2 py-0.5 rounded-md bg-[var(--bg-canvas)] border border-[var(--border-hairline)] shrink-0">
+                            {channel.quality || '1080p'}
                           </span>
                         )}
                       </div>
 
-                      {/* Center/Bottom Network Channel Title & Play Trigger */}
-                      <div className="relative z-10 flex items-end justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="text-[11px] font-mono uppercase tracking-wider text-white/75 font-bold">
-                            {brand.networkName}
-                          </div>
-                          <h3 className="text-base sm:text-lg font-black text-white truncate drop-shadow-sm">
-                            {channel.arabicName || channel.name}
-                          </h3>
-                        </div>
-
-                        <div className="w-10 h-10 rounded-xl bg-white/15 group-hover:bg-emerald-500 text-white group-hover:text-stone-950 backdrop-blur-xs border border-white/20 group-hover:border-emerald-400 flex items-center justify-center transition-all shrink-0 shadow-md">
-                          <Play className="w-4 h-4 fill-current" />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Card Body: Current Broadcast / Match Info */}
-                    <div className="p-3.5 flex-1 flex flex-col justify-between gap-3 bg-[#101218]">
                       {isMatch && matchData ? (
-                        <div className="rounded-xl bg-stone-900/90 border border-stone-800 p-2.5 space-y-1">
-                          <div className="flex items-center justify-between text-[10px] text-emerald-400 font-bold">
-                            <span className="truncate">{matchData.competition}</span>
-                            <span className="font-mono-num shrink-0">
-                              {matchData.status === 'LIVE' ? matchData.minute || 'مباشر' : matchData.time}
+                        <div className="flex items-center justify-between gap-2 text-[11px] rounded-lg bg-[var(--bg-canvas)]/90 border border-[var(--border-hairline)] px-2.5 py-1">
+                          <div className="min-w-0 flex-1 flex items-center gap-1 truncate">
+                            <span
+                              className="font-bold text-[var(--accent-primary)] truncate max-w-[48%]"
+                              title={matchData.teamA.name}
+                            >
+                              {matchData.teamA.name}
+                            </span>
+                            <span className="text-[var(--text-muted)] text-[10px] shrink-0">vs</span>
+                            <span
+                              className="font-bold text-[var(--accent-primary)] truncate max-w-[48%]"
+                              title={matchData.teamB.name}
+                            >
+                              {matchData.teamB.name}
                             </span>
                           </div>
-                          <div className="text-xs font-extrabold text-white truncate">
-                            {matchData.teamA.name} ضد {matchData.teamB.name}
-                          </div>
+                          <span className="font-display-num text-xs font-black text-[var(--text-primary)] shrink-0 px-1.5 py-0.5 rounded bg-[var(--bg-elevated)] border border-[var(--border-hairline)]">
+                            {matchData.status === 'LIVE'
+                              ? formatBroadcastMinute(matchData.minute)
+                              : matchData.time}
+                          </span>
                         </div>
                       ) : (
-                        <div className="flex items-center justify-between text-xs text-stone-300 py-1">
-                          <span className="truncate flex items-center gap-1.5">
-                            <Radio className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                            <span className="truncate">
-                              {broadcast?.programTitle || brand.networkSubLabel}
-                            </span>
+                        <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
+                          <span className="truncate">
+                            {broadcast?.programTitle || brand.networkSubLabel}
+                          </span>
+                          <span className="text-[10px] text-[var(--text-muted)] shrink-0">
+                            {channel.lang === 'Arabic' ? 'عربي' : channel.lang || 'عربي'}
                           </span>
                         </div>
                       )}
+                    </div>
 
-                      <div className="pt-2 border-t border-stone-800/80 flex items-center justify-between text-[11px] text-stone-400">
-                        <span>التعليق: {channel.lang === 'Arabic' ? 'عربي' : channel.lang || 'عربي'}</span>
-                        <span className="text-emerald-400 font-bold group-hover:underline">
-                          تشغيل القناة ←
-                        </span>
-                      </div>
+                    {/* Play Trigger Column */}
+                    <div className="px-3 flex items-center justify-center border-r border-[var(--border-hairline)] bg-[var(--bg-canvas)]/30 group-hover:bg-[var(--accent-primary)] group-hover:text-[var(--accent-contrast)] text-[var(--text-muted)] transition-all shrink-0">
+                      <Play className="w-3.5 h-3.5 fill-current" />
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* 4. Infinite Scroll Sentinel & Load-More Status */}
-            <div ref={loadMoreSentinelRef} className="py-6 flex flex-col items-center justify-center gap-3">
+            {/* Load-More Bar */}
+            <div ref={loadMoreSentinelRef} className="py-5 flex flex-col items-center justify-center">
               {hasMoreChannels ? (
                 <button
                   type="button"
                   onClick={() =>
                     setVisibleCount(prev => Math.min(prev + BATCH_SIZE, filteredChannels.length))
                   }
-                  className="px-6 py-3 rounded-2xl bg-[#101218] hover:bg-stone-800/90 border border-stone-800 text-xs font-extrabold text-stone-200 hover:text-white flex items-center gap-2 transition cursor-pointer shadow-md"
+                  className="px-6 py-2.5 rounded-[2px] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-strong)] text-xs font-extrabold text-[var(--text-primary)] flex items-center gap-2 transition-colors cursor-pointer"
                 >
-                  <ChevronDown className="w-4 h-4 text-emerald-400 animate-bounce" />
+                  <ChevronDown className="w-4 h-4 text-[var(--accent-primary)]" />
                   <span>
-                    عرض المزيد من القنوات ({visibleChannels.length} من {filteredChannels.length})
+                    إظهار المزيد من القنوات ({visibleChannels.length} / {filteredChannels.length})
                   </span>
                 </button>
               ) : (
-                <div className="text-xs text-stone-500 font-medium">
-                  تم عرض جميع القنوات المتاحة ({filteredChannels.length} قناة)
+                <div className="text-[11px] font-display-num uppercase tracking-wider text-[var(--text-muted)]">
+                  END OF DIRECTORY · {filteredChannels.length} CHANNELS LOADED
                 </div>
               )}
             </div>

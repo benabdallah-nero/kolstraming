@@ -18,49 +18,31 @@ export default function App() {
     <BrowserRouter>
       <AppProvider>
         <div
-          className="min-h-screen theme-canvas flex flex-col pb-20 md:pb-0 antialiased selection:bg-emerald-500/30 selection:text-white transition-colors duration-300"
+          className="min-h-screen theme-canvas flex flex-col pb-16 md:pb-0 antialiased selection:bg-[#c8f526] selection:text-[#0a0f0c]"
           dir="rtl"
         >
-          {/* Sticky Consumer Header */}
+          {/* Broadcast Top Control Bar */}
           <Navbar />
 
-          {/* Main Viewport Container */}
+          {/* Main Broadcast Viewport Container */}
           <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
             <Routes>
-              {/* Default Redirect to /home */}
               <Route path="/" element={<Navigate to="/home" replace />} />
-
-              {/* /home (Featured Match + Infinite-Scroll Channel Catalog) */}
               <Route path="/home" element={<HomePage />} />
-
-              {/* /watchroom & /watchroom/:channelId (Focused Watch Room) */}
               <Route path="/watchroom" element={<WatchRoomPage />} />
               <Route path="/watchroom/:channelId" element={<WatchRoomPage />} />
-
-              {/* /schedual (Live & Multi-Day Match Schedule) */}
               <Route path="/schedual" element={<SchedulePage />} />
               <Route path="/schedule" element={<Navigate to="/schedual" replace />} />
-
-              {/* /leagues (League Standings & Tournaments Hub) */}
               <Route path="/leagues" element={<LeaguesPage />} />
-
-              {/* Legal & Policy Pages */}
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/dmca" element={<DmcaPage />} />
-
-              {/* Catch-all */}
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
           </main>
 
-          {/* Website Footer */}
           <Footer />
-
-          {/* Persistent Floating Mini-Player Pill */}
           <MiniPlayerPill />
-
-          {/* Mobile Bottom Navigation */}
           <BottomDock />
         </div>
       </AppProvider>

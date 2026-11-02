@@ -1076,10 +1076,7 @@ export async function fetchMatchesByDateWithFallback(
   if (dateKey === 'yesterday') targetDate.setUTCDate(targetDate.getUTCDate() - 1);
   else if (dateKey === 'tomorrow') targetDate.setUTCDate(targetDate.getUTCDate() + 1);
   const ykDate = `${targetDate.getUTCMonth() + 1}/${targetDate.getUTCDate()}/${targetDate.getUTCFullYear()}`;
-  const ykUrl =
-    dateKey === 'today'
-      ? 'https://www.yallakora.com/matches-center'
-      : `https://www.yallakora.com/matches-center?date=${encodeURIComponent(ykDate)}`;
+  const ykUrl = `https://www.yallakora.com/matches-center?date=${encodeURIComponent(ykDate)}`;
 
   const html = await fetchViaCorsProxy(ykUrl, 6500);
   if (!html) return [];

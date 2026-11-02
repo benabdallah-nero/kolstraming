@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Lock, Eye, Server, RefreshCw, ChevronLeft } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { usePageSeo } from '../hooks/usePageSeo';
 
@@ -12,75 +12,68 @@ export const PrivacyPage: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="max-w-4xl mx-auto py-6 sm:py-10 space-y-8 animate-in fade-in duration-200" dir="rtl">
-      {/* Header */}
-      <div className="space-y-3 border-b border-stone-800 pb-6">
+    <div className="max-w-4xl mx-auto py-6 sm:py-10 space-y-6" dir="rtl">
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-hairline)] rounded-[2px] p-5 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="w-1.5 h-8 bg-[var(--accent-primary)] shrink-0" />
+          <div>
+            <h1 className="font-display-ar text-xl sm:text-2xl font-extrabold text-[var(--text-primary)]">
+              سياسة الخصوصية (Privacy Policy)
+            </h1>
+            <p className="text-xs text-[var(--text-muted)] font-display-num">
+              UPDATED · 2026
+            </p>
+          </div>
+        </div>
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-1.5 text-xs text-stone-400 hover:text-emerald-400 transition mb-2"
+          className="px-3 py-1.5 rounded-[2px] bg-[var(--bg-canvas)] border border-[var(--border-hairline)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1.5 cursor-pointer"
         >
-          <ChevronLeft className="w-4 h-4 rotate-180" />
           <span>رجوع</span>
+          <ChevronLeft className="w-3.5 h-3.5" />
         </button>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <Shield className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-stone-100">سياسة الخصوصية (Privacy Policy)</h1>
-            <p className="text-xs sm:text-sm text-stone-400">آخر تحديث: 2026</p>
-          </div>
-        </div>
       </div>
 
-      {/* Sections */}
-      <div className="space-y-6 text-sm text-stone-300 leading-relaxed">
-        <section className="bg-[#121316] border border-stone-800/80 rounded-2xl p-5 sm:p-6 space-y-3">
-          <div className="flex items-center gap-2 text-stone-100 font-bold text-base">
-            <Lock className="w-4 h-4 text-emerald-400" />
-            <h2>1. جمع البيانات والخصوصية</h2>
-          </div>
+      <div className="border border-[var(--border-hairline)] divide-y divide-[var(--border-hairline)] bg-[var(--bg-surface)] rounded-[2px] text-sm text-[var(--text-secondary)] leading-relaxed">
+        <section className="p-5 space-y-2">
+          <h2 className="font-display-ar text-base font-extrabold text-[var(--text-primary)]">
+            01. جمع البيانات والخصوصية
+          </h2>
           <p>
-            في منصة <strong>kolstream</strong>، نضع خصوصية المستخدم على رأس أولوياتنا. المنصة مصممة للعمل دون الحاجة لإنشاء حساب، إدخال بريد إلكتروني، أو تقديم أي معلومات شخصية حساسة.
+            في منصة <strong className="text-[var(--text-primary)]">kolstream</strong>، نضع خصوصية المستخدم على رأس أولوياتنا. المنصة مصممة للعمل دون الحاجة لإنشاء حساب، إدخال بريد إلكتروني، أو تقديم أي معلومات شخصية حساسة.
           </p>
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-[var(--text-muted)]">
             تتم معالجة تصفحك بشكل مجهول تماماً دون أي محاولة لربط هويتك الشخصية بالقنوات أو المباريات التي تتابعها.
           </p>
         </section>
 
-        <section className="bg-[#121316] border border-stone-800/80 rounded-2xl p-5 sm:p-6 space-y-3">
-          <div className="flex items-center gap-2 text-stone-100 font-bold text-base">
-            <Server className="w-4 h-4 text-emerald-400" />
-            <h2>2. التخزين المحلي (Local Storage)</h2>
-          </div>
+        <section className="p-5 space-y-2">
+          <h2 className="font-display-ar text-base font-extrabold text-[var(--text-primary)]">
+            02. التخزين المحلي (Local Storage)
+          </h2>
           <p>
             نستخدم ميزة التخزين المحلي في متصفحك (Browser LocalStorage) حصراً للأغراض التقنية التالية:
           </p>
-          <ul className="list-disc list-inside space-y-1.5 text-xs text-stone-400 pr-2">
-            <li>حفظ قائمة <strong>القنوات المفضلة</strong> التي تختارها حتى تظل متوفرة في زياراتك القادمة.</li>
+          <ul className="list-disc list-inside space-y-1 text-xs text-[var(--text-muted)] pr-2">
+            <li>حفظ قائمة القنوات والتنبيهات التي تختارها حتى تظل متوفرة في زياراتك القادمة.</li>
             <li>تذكر تفضيلات دقة البث وحجم الشاشة لتوفير تجربة تشغيل سلسة.</li>
           </ul>
-          <p className="text-xs text-stone-400">
-            هذه البيانات مخزنة محلياً على جهازك فقط ولا يتم نقلها أو مشاركتها مع أي خوادم خارجية.
-          </p>
         </section>
 
-        <section className="bg-[#121316] border border-stone-800/80 rounded-2xl p-5 sm:p-6 space-y-3">
-          <div className="flex items-center gap-2 text-stone-100 font-bold text-base">
-            <Eye className="w-4 h-4 text-emerald-400" />
-            <h2>3. ملفات تعريف الارتباط (Cookies) وخوادم الطرف الثالث</h2>
-          </div>
+        <section className="p-5 space-y-2">
+          <h2 className="font-display-ar text-base font-extrabold text-[var(--text-primary)]">
+            03. ملفات تعريف الارتباط وخوادم البث
+          </h2>
           <p>
-            موقعنا لا يعتمد ملفات تعريف ارتباط تتبعية أو إعلانية موجهة. ومع ذلك، عند تشغيل بعض مشغلات الفيديو التضمينية، قد تضع خوادم البث المستضيفة ملفات تعريف ارتباط مؤقتة لتنظيم تدفق البث والتحقق من صلاحية الجلسة.
+            موقعنا لا يعتمد ملفات تعريف ارتباط تتبعية أو إعلانية موجهة. عند تشغيل بعض مشغلات الفيديو التضمينية، قد تضع خوادم البث المستضيفة ملفات تعريف ارتباط مؤقتة لتنظيم تدفق البث والتحقق من صلاحية الجلسة.
           </p>
         </section>
 
-        <section className="bg-[#121316] border border-stone-800/80 rounded-2xl p-5 sm:p-6 space-y-3">
-          <div className="flex items-center gap-2 text-stone-100 font-bold text-base">
-            <RefreshCw className="w-4 h-4 text-emerald-400" />
-            <h2>4. التحديثات والتعديلات</h2>
-          </div>
+        <section className="p-5 space-y-2">
+          <h2 className="font-display-ar text-base font-extrabold text-[var(--text-primary)]">
+            04. التحديثات والتعديلات
+          </h2>
           <p>
             قد نقوم بتحديث سياسة الخصوصية من وقت لآخر لتعكس التحسينات التقنية والتنظيمية في المنصة. سيتم نشر أي تغيير على هذه الصفحة مباشرة.
           </p>

@@ -4,9 +4,6 @@ import Hls from 'hls.js';
 import {
   RotateCw,
   Maximize,
-  Tv,
-  AlertCircle,
-  Calendar,
   Check,
   Volume2,
   VolumeX,
@@ -22,6 +19,7 @@ import { useApp, getApiUrl } from '../context/AppContext';
 import { Channel, QualityResolution } from '../types';
 import { usePageSeo } from '../hooks/usePageSeo';
 import { getChannelBrandIdentity } from '../utils/channelBranding';
+import { formatBroadcastMinute } from '../utils/broadcastFormatters';
 
 interface QualityOptionItem {
   id: QualityResolution;
@@ -29,13 +27,13 @@ interface QualityOptionItem {
 }
 
 const QUALITY_OPTIONS: QualityOptionItem[] = [
-  { id: 'auto', badge: 'تلقائي' },
-  { id: '1080p', badge: '1080p' },
-  { id: '720p', badge: '720p' },
-  { id: '480p', badge: '480p' }
+  { id: 'auto', badge: 'AUTO' },
+  { id: '1080p', badge: '1080P' },
+  { id: '720p', badge: '720P' },
+  { id: '480p', badge: '480P' }
 ];
 
-// Clean, standard Hls.js configuration for live MPEG-TS streams (no nudging or frame-jumping)
+// Clean, standard Hls.js configuration for live MPEG-TS streams
 function createCleanHlsInstance(): Hls {
   return new Hls({
     enableWorker: true,
@@ -55,7 +53,6 @@ function createCleanHlsInstance(): Hls {
   });
 }
 
-// Self-contained Multi-Screen Cell Player
 const MultiViewCellPlayer: React.FC<{
   channel: Channel;
   allChannels: Channel[];
@@ -155,30 +152,26 @@ const MultiViewCellPlayer: React.FC<{
     }
   }, [isAudioActive]);
 
-  const brand = getChannelBrandIdentity(channel);
-
   return (
     <div
       onClick={onSelectAudio}
-      className={`relative rounded-2xl overflow-hidden bg-black border transition-all flex flex-col ${
+      className={`relative rounded-[2px] overflow-hidden bg-black border transition-colors flex flex-col ${
         isAudioActive
-          ? 'border-emerald-500 ring-1 ring-emerald-500/40 shadow-lg'
-          : 'border-stone-800 hover:border-stone-700'
+          ? 'border-[var(--accent-primary)]'
+          : 'border-[var(--border-hairline)] hover:border-[var(--border-strong)]'
       }`}
     >
       {/* Cell Header */}
-      <div className="bg-[#101218] px-3 py-2 border-b border-stone-800/80 flex items-center justify-between gap-2 z-10">
+      <div className="bg-[var(--bg-surface)] px-3 py-2 border-b border-[var(--border-hairline)] flex items-center justify-between gap-2 z-10">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span
-            className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded font-extrabold shrink-0 ${brand.badgeBg}`}
-          >
-            {brand.channelShortCode}
+          <span className="font-display-num text-xs font-extrabold px-1.5 py-0.5 bg-[var(--bg-canvas)] border border-[var(--border-hairline)] text-[var(--accent-primary)] shrink-0">
+            CH {String(channel.id).padStart(2, '0')}
           </span>
           <select
             value={channel.id}
             onChange={e => onChangeChannel(Number(e.target.value))}
             onClick={e => e.stopPropagation()}
-            className="bg-[#090b0f] border border-stone-800 rounded-lg px-2 py-1 text-xs font-bold text-stone-100 truncate max-w-[180px] focus:outline-none focus:border-emerald-500 cursor-pointer"
+            className="bg-[var(--bg-canvas)] border border-[var(--border-hairline)] rounded-[2px] px-2 py-1 text-xs font-bold text-[var(--text-primary)] truncate max-w-[180px] focus:outline-none focus:border-[var(--accent-primary)] cursor-pointer"
           >
             {allChannels.slice(0, 45).map(ch => (
               <option key={ch.id} value={ch.id}>
@@ -195,17 +188,17 @@ const MultiViewCellPlayer: React.FC<{
               e.stopPropagation();
               onSelectAudio();
             }}
-            className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
+            className={`px-2 py-1 rounded-[2px] text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
               isAudioActive
-                ? 'bg-emerald-500 text-stone-950'
-                : 'bg-stone-900 border border-stone-800 text-stone-400 hover:text-white'
+                ? 'bg-[var(--accent-primary)] text-[var(--accent-contrast)] font-extrabold'
+                : 'bg-[var(--bg-canvas)] border border-[var(--border-hairline)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
             title="تفعيل الصوت لهذه الشاشة"
           >
             {isAudioActive ? (
               <>
                 <Volume2 className="w-3 h-3" />
-                <span>الصوت مفعل</span>
+                <span>الصوت نشط</span>
               </>
             ) : (
               <>
@@ -222,7 +215,7 @@ const MultiViewCellPlayer: React.FC<{
                 e.stopPropagation();
                 onRemove();
               }}
-              className="p-1 rounded-lg bg-stone-900 hover:bg-rose-950/60 border border-stone-800 text-stone-400 hover:text-rose-300 transition cursor-pointer"
+              className="p-1 rounded-[2px] bg-[var(--bg-canvas)] hover:bg-[var(--signal-live)] border border-[var(--border-hairline)] text-[var(--text-secondary)] hover:text-white transition-colors cursor-pointer"
               title="إغلاق هذه الشاشة"
             >
               <X className="w-3.5 h-3.5" />
@@ -242,22 +235,22 @@ const MultiViewCellPlayer: React.FC<{
           onPlaying={() => setStatus('playing')}
         />
         {status === 'loading' && (
-          <div className="absolute inset-0 bg-black/65 flex items-center justify-center pointer-events-none">
-            <RotateCw className="w-5 h-5 animate-spin text-emerald-400" />
+          <div className="absolute inset-0 bg-black/70 flex items-center justify-center pointer-events-none">
+            <RotateCw className="w-5 h-5 animate-spin text-[var(--accent-primary)]" />
           </div>
         )}
         {status === 'error' && (
-          <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center p-3 text-center gap-2">
-            <span className="text-xs text-stone-300 font-bold">تعذر تشغيل هذا المصدر</span>
+          <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-3 text-center gap-2">
+            <span className="text-xs text-[var(--text-primary)] font-bold">انقطع الاتصال بهذا المصدر</span>
             <button
               type="button"
               onClick={e => {
                 e.stopPropagation();
                 setSourceMode(prev => (prev === 'dembed' ? 'cast' : 'wide'));
               }}
-              className="px-3 py-1 rounded-lg bg-emerald-500 text-stone-950 text-[11px] font-bold cursor-pointer"
+              className="px-3 py-1 rounded-[2px] bg-[var(--accent-primary)] text-[var(--accent-contrast)] text-[11px] font-extrabold cursor-pointer"
             >
-              تجربة سيرفر بديل
+              تبديل المصدر الاحتياطي
             </button>
           </div>
         )}
@@ -280,7 +273,6 @@ export const WatchRoomPage: React.FC = () => {
     setMultiViewIds
   } = useApp();
 
-  // Dynamically resolved metadata for channels opened directly via URL
   const [resolvedMeta, setResolvedMeta] = useState<{
     id: number;
     name: string;
@@ -316,7 +308,6 @@ export const WatchRoomPage: React.FC = () => {
     };
   }, [channelId, channels]);
 
-  // Target channel
   const currentChannel = useMemo<Channel | null>(() => {
     if (channelId) {
       const found = channels.find(c => String(c.id) === String(channelId));
@@ -351,7 +342,6 @@ export const WatchRoomPage: React.FC = () => {
     canonicalPath: currentChannel ? `/watchroom/${currentChannel.id}` : '/watchroom'
   });
 
-  // Clean 4-server state: server1, server2, server3, direct
   const [playerMode, setPlayerMode] = useState<'server1' | 'server2' | 'server3' | 'direct'>('server1');
   const [playerStatus, setPlayerStatus] = useState<'loading' | 'playing' | 'error'>('loading');
   const [retryKey, setRetryKey] = useState<number>(0);
@@ -362,7 +352,6 @@ export const WatchRoomPage: React.FC = () => {
   const [volume, setVolume] = useState<number>(1);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Subtle Multi-Screen state (strictly controlled from Watch Room player bar)
   const [isMultiViewMode, setIsMultiViewMode] = useState<boolean>(() => {
     return searchParams.get('multiview') === '1';
   });
@@ -378,7 +367,6 @@ export const WatchRoomPage: React.FC = () => {
     setTimeout(() => setToastMessage(null), 2400);
   }, []);
 
-  // Sync active streaming channel and scroll to top on channel change
   useEffect(() => {
     if (currentChannel) {
       setActiveStreamingChannel(currentChannel);
@@ -387,7 +375,6 @@ export const WatchRoomPage: React.FC = () => {
     }
   }, [currentChannel, setActiveStreamingChannel, addToWatchHistory]);
 
-  // Active match on this channel if any
   const currentMatch = useMemo(() => {
     if (!currentChannel) return null;
     return matches.find(
@@ -395,7 +382,6 @@ export const WatchRoomPage: React.FC = () => {
     );
   }, [matches, currentChannel]);
 
-  // Related channels in the same network (compact 8-channel quick switcher)
   const relatedChannels = useMemo(() => {
     if (!currentChannel) return [];
     const sameCategory = channels.filter(
@@ -405,7 +391,6 @@ export const WatchRoomPage: React.FC = () => {
     return list.slice(0, 8);
   }, [channels, currentChannel]);
 
-  // Toggle Multi-Screen mode subtly from the player bar
   const handleToggleMultiView = useCallback(() => {
     if (!isMultiViewMode) {
       if (currentChannel) {
@@ -442,7 +427,7 @@ export const WatchRoomPage: React.FC = () => {
   const handleReload = useCallback(() => {
     setPlayerStatus('loading');
     setRetryKey(prev => prev + 1);
-    showToast('جاري تحديث البث المباشر...');
+    showToast('جاري إعادة الاتصال بمصدر البث...');
   }, [showToast]);
 
   const handleStepChannel = useCallback(
@@ -531,10 +516,9 @@ export const WatchRoomPage: React.FC = () => {
   const handleSelectQuality = (quality: QualityResolution) => {
     setSelectedQuality(quality);
     applyQualityToHls(quality);
-    showToast(`تم اختيار الجودة: ${quality === 'auto' ? 'تلقائي' : quality}`);
+    showToast(`تم اختيار الدقة: ${quality === 'auto' ? 'تلقائي' : quality}`);
   };
 
-  // Smooth, Anti-Stutter HLS Video Player
   useEffect(() => {
     if (isMultiViewMode) {
       if (hlsRef.current) {
@@ -642,9 +626,9 @@ export const WatchRoomPage: React.FC = () => {
 
   if (loadingChannels && !currentChannel) {
     return (
-      <div className="py-24 text-center space-y-3" dir="rtl">
-        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
-        <div className="text-xs text-stone-400">جاري تجهيز المشغل...</div>
+      <div className="py-24 text-center space-y-3 border border-[var(--border-hairline)] bg-[var(--bg-surface)]" dir="rtl">
+        <div className="w-6 h-6 border-2 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin mx-auto" />
+        <div className="text-xs text-[var(--text-secondary)] font-bold">جاري تهيئة وحدة البث المباشر...</div>
       </div>
     );
   }
@@ -652,14 +636,16 @@ export const WatchRoomPage: React.FC = () => {
   if (!currentChannel) {
     return (
       <div
-        className="py-24 text-center border border-dashed border-stone-800 rounded-2xl p-8 space-y-3"
+        className="py-20 text-center border border-[var(--border-hairline)] bg-[var(--bg-surface)] rounded-[2px] p-8 space-y-3"
         dir="rtl"
       >
-        <AlertCircle className="w-8 h-8 text-stone-500 mx-auto" />
-        <div className="text-sm font-semibold text-stone-200">القناة المطلوبة غير متوفرة</div>
+        <div className="font-display-num text-2xl font-extrabold text-[var(--text-muted)]">
+          SIGNAL UNAVAILABLE
+        </div>
+        <div className="text-sm font-bold text-[var(--text-primary)]">القناة المطلوبة غير متوفرة حالياً</div>
         <button
           onClick={() => navigate('/home')}
-          className="px-4 py-2 rounded-xl bg-stone-900 border border-stone-800 text-xs text-stone-300 hover:text-white transition cursor-pointer"
+          className="px-4 py-2 rounded-[2px] bg-[var(--accent-primary)] text-[var(--accent-contrast)] text-xs font-extrabold transition cursor-pointer"
         >
           العودة إلى دليل القنوات
         </button>
@@ -675,67 +661,94 @@ export const WatchRoomPage: React.FC = () => {
 
   return (
     <div
-      className={`space-y-5 animate-in fade-in duration-200 ${
+      className={`space-y-4 ${
         isTheaterMode || isMultiViewMode ? 'max-w-none w-full' : 'max-w-6xl mx-auto'
       }`}
       dir="rtl"
     >
-      {/* Subtle Feedback Toast */}
+      {/* Feedback Toast */}
       {toastMessage && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-stone-900/95 border border-emerald-500/50 text-emerald-400 px-4 py-2 rounded-xl text-xs font-bold shadow-2xl backdrop-blur-md flex items-center gap-2">
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-[var(--bg-surface)] border border-[var(--accent-primary)] text-[var(--accent-primary)] px-4 py-2 rounded-[2px] text-xs font-bold flex items-center gap-2">
           <Check className="w-4 h-4 shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* 1. Top Bar Above Player: Channel Identity + Clean Server 1-4 Switcher */}
-      <div className="bg-[#101218] border border-stone-800/90 rounded-2xl p-3.5 sm:px-5 flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <span
-            className={`text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-lg font-extrabold shrink-0 ${brand.badgeBg}`}
-          >
-            {brand.badgeText}
-          </span>
-          <div className="min-w-0">
-            <h1 className="text-base sm:text-lg font-black text-white truncate">
-              {currentChannel.arabicName || currentChannel.name}
-            </h1>
-            <p className="text-[11px] text-stone-400 truncate">
-              {currentMatch
-                ? `${currentMatch.competition}: ${currentMatch.teamA.name} ضد ${currentMatch.teamB.name}`
-                : brand.networkSubLabel}
-            </p>
+      {/* 1. BROADCAST LOWER-THIRD SCOREBOARD & SERVER SWITCHER HEADER */}
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-hairline)] rounded-[2px] flex flex-col lg:flex-row lg:items-stretch justify-between">
+        {/* Channel Call-Sign + Active Match Scoreline */}
+        <div className="flex items-stretch min-w-0 border-b lg:border-b-0 border-[var(--border-hairline)]">
+          <div className="w-20 bg-[var(--bg-canvas)] border-l border-[var(--border-hairline)] flex flex-col items-center justify-center px-2 py-2.5 shrink-0">
+            <span className="font-display-num text-2xl font-extrabold text-[var(--accent-primary)] leading-none">
+              CH {String(currentChannel.id).padStart(2, '0')}
+            </span>
+            <span className="font-display-num text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mt-1">
+              {brand.badgeText}
+            </span>
+          </div>
+
+          <div className="px-4 py-2.5 flex flex-col justify-center min-w-0">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2 h-2 rounded-full live-dot-pulse shrink-0" />
+              <h1 className="font-display-ar text-base sm:text-lg font-extrabold text-[var(--text-primary)] truncate">
+                {currentChannel.arabicName || currentChannel.name}
+              </h1>
+            </div>
+
+            {currentMatch ? (
+              <div className="flex items-center gap-2 text-xs mt-0.5">
+                <span className="text-[var(--text-secondary)] truncate">
+                  {currentMatch.competition}:
+                </span>
+                <span className="font-bold text-[var(--accent-primary)] truncate">
+                  {currentMatch.teamA.name}{' '}
+                  {currentMatch.scoreA !== null && currentMatch.scoreB !== null
+                    ? `(${currentMatch.scoreA} - ${currentMatch.scoreB})`
+                    : 'ضد'}{' '}
+                  {currentMatch.teamB.name}
+                </span>
+                {currentMatch.status === 'LIVE' && (
+                  <span className="font-display-num text-xs font-extrabold text-[var(--signal-live)]">
+                    [{formatBroadcastMinute(currentMatch.minute)}]
+                  </span>
+                )}
+              </div>
+            ) : (
+              <p className="text-[11px] text-[var(--text-muted)] truncate mt-0.5">
+                {brand.networkSubLabel} · جودة {currentChannel.quality || '1080p FHD'}
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Clean Server 1-4 Buttons (or Multi-Screen Controls when active) */}
+        {/* Server 1-4 Switcher Matrix */}
         {isMultiViewMode ? (
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="p-2.5 flex items-center gap-2 flex-wrap bg-[var(--bg-canvas)]">
             {activeMultiChannels.length < 4 && (
               <button
                 type="button"
                 onClick={handleAddMultiViewSlot}
-                className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
+                className="px-3.5 py-2 rounded-[2px] bg-[var(--accent-primary)] text-[var(--accent-contrast)] text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>إضافة قناة ({activeMultiChannels.length}/4)</span>
+                <span>إضافة شاشة ({activeMultiChannels.length}/4)</span>
               </button>
             )}
             <button
               type="button"
               onClick={handleToggleMultiView}
-              className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-200 text-xs font-bold transition cursor-pointer"
+              className="px-3.5 py-2 rounded-[2px] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] border border-[var(--border-hairline)] text-[var(--text-primary)] text-xs font-bold transition cursor-pointer"
             >
               إنهاء الشاشة المتعددة
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="grid grid-cols-2 sm:flex items-stretch bg-[var(--bg-canvas)]">
             {([
-              { id: 'server1', label: 'سيرفر 1 (أساسي)' },
-              { id: 'server2', label: 'سيرفر 2 (بديل مستقر)' },
-              { id: 'server3', label: 'سيرفر 3' },
-              { id: 'direct', label: 'سيرفر 4 (مباشر)' }
+              { id: 'server1', code: 'FEED 01', label: 'المصدر الرئيسي' },
+              { id: 'server2', code: 'FEED 02', label: 'المصدر البديل' },
+              { id: 'server3', code: 'FEED 03', label: 'سيرفر احتياطي' },
+              { id: 'direct', code: 'FEED 04', label: 'البث المدمج' }
             ] as const).map(srv => {
               const active = playerMode === srv.id;
               return (
@@ -745,15 +758,18 @@ export const WatchRoomPage: React.FC = () => {
                   onClick={() => {
                     setPlayerMode(srv.id);
                     if (srv.id === 'direct') setPlayerStatus('playing');
-                    showToast(`تم التبديل إلى ${srv.label}`);
+                    showToast(`تم التحويل إلى ${srv.label}`);
                   }}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer ${
+                  className={`px-4 py-2.5 border-r border-[var(--border-hairline)] border-b-[3px] text-right transition-colors cursor-pointer flex flex-col justify-center ${
                     active
-                      ? 'bg-emerald-500 text-stone-950 shadow-sm'
-                      : 'bg-[#090b0f] hover:bg-stone-800 border border-stone-800 text-stone-300 hover:text-white'
+                      ? 'border-b-[var(--accent-primary)] bg-[var(--bg-elevated)] text-[var(--accent-primary)]'
+                      : 'border-b-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]'
                   }`}
                 >
-                  {srv.label}
+                  <span className="font-display-num text-[10px] font-extrabold tracking-widest uppercase opacity-80">
+                    {srv.code}
+                  </span>
+                  <span className="text-xs font-extrabold whitespace-nowrap">{srv.label}</span>
                 </button>
               );
             })}
@@ -761,11 +777,11 @@ export const WatchRoomPage: React.FC = () => {
         )}
       </div>
 
-      {/* 2. Video Player Viewport (Single Stream OR Multi-Screen 2x2 Grid) */}
+      {/* 2. VIDEO PLAYER VIEWPORT */}
       {isMultiViewMode ? (
         <div
           ref={containerRef}
-          className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-[#090b0f] p-3 rounded-2xl border border-stone-800/90"
+          className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-[var(--bg-surface)] p-3 rounded-[2px] border border-[var(--border-hairline)]"
         >
           {activeMultiChannels.map((ch, idx) => (
             <MultiViewCellPlayer
@@ -798,7 +814,7 @@ export const WatchRoomPage: React.FC = () => {
           onClick={() => {
             if (isMuted) handleForceUnmute();
           }}
-          className={`relative w-full bg-black rounded-2xl overflow-hidden border border-stone-800/90 shadow-2xl flex items-center justify-center ${
+          className={`relative w-full bg-black rounded-[2px] overflow-hidden border border-[var(--border-hairline)] flex items-center justify-center ${
             isTheaterMode ? 'aspect-[16/9] sm:aspect-[21/9] max-h-[78vh]' : 'aspect-video'
           }`}
         >
@@ -828,7 +844,6 @@ export const WatchRoomPage: React.FC = () => {
             />
           )}
 
-          {/* Unmute Prompt if Browser Autoplay Muted */}
           {isMuted && playerMode !== 'direct' && (
             <button
               type="button"
@@ -836,20 +851,23 @@ export const WatchRoomPage: React.FC = () => {
                 e.stopPropagation();
                 handleForceUnmute();
               }}
-              className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-emerald-500 hover:bg-emerald-400 text-stone-950 px-4 py-2 rounded-full text-xs sm:text-sm font-extrabold shadow-2xl flex items-center gap-2 transition cursor-pointer"
+              className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-[var(--accent-primary)] text-[var(--accent-contrast)] px-4 py-2 rounded-[2px] text-xs font-extrabold flex items-center gap-2 transition cursor-pointer"
             >
               <Volume2 className="w-4 h-4 shrink-0" />
-              <span>اضغط لتشغيل صوت البث</span>
+              <span>اضغط لتفعيل صوت البث المباشر</span>
             </button>
           )}
 
-          {/* Error Recovery */}
           {playerStatus === 'error' && playerMode !== 'direct' && (
-            <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-4 text-center z-20 space-y-3">
-              <AlertCircle className="w-9 h-9 text-amber-400" />
-              <div className="text-sm font-bold text-stone-100">تعذر الاتصال بهذا السيرفر حالياً</div>
-              <p className="text-xs text-stone-400 max-w-sm">
-                يرجى اختيار سيرفر آخر من الأزرار بالأعلى أو الانتقال إلى المشغل المباشر.
+            <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-4 text-center z-20 space-y-3">
+              <div className="font-display-num text-2xl font-extrabold text-[var(--signal-live)]">
+                SIGNAL INTERRUPTED
+              </div>
+              <div className="text-sm font-bold text-[var(--text-primary)]">
+                تعذر استلام إشارة هذا المصدر حالياً
+              </div>
+              <p className="text-xs text-[var(--text-secondary)] max-w-sm">
+                انتقل فوراً إلى المصدر البديل بالأعلى أو اضغط أدناه للتحويل التلقائي.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                 <button
@@ -864,66 +882,63 @@ export const WatchRoomPage: React.FC = () => {
                     setPlayerMode(next);
                     if (next === 'direct') setPlayerStatus('playing');
                   }}
-                  className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-extrabold text-xs transition cursor-pointer"
+                  className="px-4 py-2 rounded-[2px] bg-[var(--accent-primary)] text-[var(--accent-contrast)] font-extrabold text-xs transition cursor-pointer"
                 >
-                  التبديل للسيرفر البديل
+                  التحويل للمصدر البديل
                 </button>
                 <button
                   type="button"
                   onClick={handleReload}
-                  className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-200 text-xs font-bold transition cursor-pointer"
+                  className="px-3.5 py-2 rounded-[2px] bg-[var(--bg-surface)] border border-[var(--border-strong)] text-[var(--text-primary)] text-xs font-bold transition cursor-pointer"
                 >
-                  إعادة المحاولة
+                  إعادة الاتصال
                 </button>
               </div>
             </div>
           )}
 
-          {/* Initial Loading Spinner (only shown before playback begins) */}
           {playerStatus === 'loading' && playerMode !== 'direct' && (
-            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-stone-300 gap-2 z-10 pointer-events-none">
-              <RotateCw className="w-6 h-6 animate-spin text-emerald-400" />
-              <span className="text-xs font-medium">جاري الاتصال بالبث المباشر...</span>
+            <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center text-[var(--text-primary)] gap-2 z-10 pointer-events-none">
+              <RotateCw className="w-6 h-6 animate-spin text-[var(--accent-primary)]" />
+              <span className="text-xs font-bold">جاري استقبال إشارة البث المباشر...</span>
             </div>
           )}
         </div>
       )}
 
-      {/* 3. Essential Consumer Player Controls Bar (including subtle Multi-Screen button) */}
-      <div className="bg-[#101218] border border-stone-800/90 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2">
-        {/* Left: Prev/Next Channel Zapper */}
+      {/* 3. BROADCAST CONTROL DECK */}
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-hairline)] rounded-[2px] p-2.5 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => handleStepChannel(-1)}
-            className="px-3 py-2 rounded-xl bg-[#090b0f] hover:bg-stone-800 border border-stone-800 text-xs font-bold text-stone-300 hover:text-white flex items-center gap-1 transition cursor-pointer"
+            className="px-3 py-1.5 rounded-[2px] bg-[var(--bg-canvas)] hover:bg-[var(--bg-elevated)] border border-[var(--border-hairline)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1 transition-colors cursor-pointer"
           >
-            <ChevronRight className="w-3.5 h-3.5 text-emerald-400" />
+            <ChevronRight className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
             <span>القناة السابقة</span>
           </button>
           <button
             type="button"
             onClick={() => handleStepChannel(1)}
-            className="px-3 py-2 rounded-xl bg-[#090b0f] hover:bg-stone-800 border border-stone-800 text-xs font-bold text-stone-300 hover:text-white flex items-center gap-1 transition cursor-pointer"
+            className="px-3 py-1.5 rounded-[2px] bg-[var(--bg-canvas)] hover:bg-[var(--bg-elevated)] border border-[var(--border-hairline)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1 transition-colors cursor-pointer"
           >
             <span>القناة التالية</span>
-            <ChevronLeft className="w-3.5 h-3.5 text-emerald-400" />
+            <ChevronLeft className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
           </button>
         </div>
 
-        {/* Right: Mute, Quality, Reload, Subtle Multi-Screen Toggle, Theater, Fullscreen, Share */}
         <div className="flex items-center gap-1.5 flex-wrap">
           {!isMultiViewMode && hasMultipleLevels && playerMode !== 'direct' && (
-            <div className="flex items-center gap-1 bg-[#090b0f] border border-stone-800 rounded-xl p-1">
+            <div className="flex items-center bg-[var(--bg-canvas)] border border-[var(--border-hairline)] rounded-[2px]">
               {QUALITY_OPTIONS.map(opt => (
                 <button
                   key={opt.id}
                   type="button"
                   onClick={() => handleSelectQuality(opt.id)}
-                  className={`px-2 py-1 rounded-lg text-[11px] font-mono-num transition cursor-pointer ${
+                  className={`px-2.5 py-1 text-xs font-display-num font-bold border-l last:border-l-0 border-[var(--border-hairline)] transition-colors cursor-pointer ${
                     selectedQuality === opt.id
-                      ? 'bg-emerald-500 text-stone-950 font-bold'
-                      : 'text-stone-400 hover:text-white'
+                      ? 'bg-[var(--accent-primary)] text-[var(--accent-contrast)]'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   {opt.badge}
@@ -936,16 +951,16 @@ export const WatchRoomPage: React.FC = () => {
             <button
               type="button"
               onClick={handleToggleMute}
-              className="px-3 py-2 rounded-xl bg-[#090b0f] hover:bg-stone-800 border border-stone-800 text-xs font-bold text-stone-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
+              className="px-3 py-1.5 rounded-[2px] bg-[var(--bg-canvas)] hover:bg-[var(--bg-elevated)] border border-[var(--border-hairline)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               {isMuted ? (
                 <>
-                  <VolumeX className="w-4 h-4 text-rose-400" />
+                  <VolumeX className="w-3.5 h-3.5 text-[var(--signal-live)]" />
                   <span>إلغاء الكتم</span>
                 </>
               ) : (
                 <>
-                  <Volume2 className="w-4 h-4 text-emerald-400" />
+                  <Volume2 className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
                   <span className="hidden sm:inline">الصوت</span>
                 </>
               )}
@@ -955,25 +970,22 @@ export const WatchRoomPage: React.FC = () => {
           <button
             type="button"
             onClick={handleReload}
-            className="px-3 py-2 rounded-xl bg-[#090b0f] hover:bg-stone-800 border border-stone-800 text-xs font-bold text-stone-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
-            title="إعادة تحميل البث"
+            className="px-3 py-1.5 rounded-[2px] bg-[var(--bg-canvas)] hover:bg-[var(--bg-elevated)] border border-[var(--border-hairline)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1.5 transition-colors cursor-pointer"
           >
-            <RotateCw className="w-3.5 h-3.5 text-emerald-400" />
-            <span>تحديث</span>
+            <RotateCw className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
+            <span>تحديث الإشارة</span>
           </button>
 
-          {/* Subtle Multi-Screen Toggle Button (Strictly in Player Bar Only) */}
           <button
             type="button"
             onClick={handleToggleMultiView}
-            className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+            className={`px-3 py-1.5 rounded-[2px] border text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
               isMultiViewMode
-                ? 'bg-purple-600/30 border-purple-400 text-white'
-                : 'bg-[#090b0f] hover:bg-stone-800 border-stone-800 text-stone-300 hover:text-white'
+                ? 'bg-[var(--accent-primary)] border-[var(--accent-primary)] text-[var(--accent-contrast)] font-extrabold'
+                : 'bg-[var(--bg-canvas)] hover:bg-[var(--bg-elevated)] border-[var(--border-hairline)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
-            title="تشغيل أكثر من قناة في وقت واحد"
           >
-            <Grid className="w-3.5 h-3.5 text-purple-400" />
+            <Grid className="w-3.5 h-3.5" />
             <span>شاشة متعددة</span>
           </button>
 
@@ -981,18 +993,18 @@ export const WatchRoomPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsTheaterMode(prev => !prev)}
-              className="hidden md:flex px-3 py-2 rounded-xl bg-[#090b0f] hover:bg-stone-800 border border-stone-800 text-xs font-bold text-stone-300 hover:text-white items-center gap-1.5 transition cursor-pointer"
+              className="hidden md:flex px-3 py-1.5 rounded-[2px] bg-[var(--bg-canvas)] hover:bg-[var(--bg-elevated)] border border-[var(--border-hairline)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] items-center gap-1.5 transition-colors cursor-pointer"
             >
-              <span>{isTheaterMode ? 'الحجم العادي' : 'وضع المسرح'}</span>
+              <span>{isTheaterMode ? 'العرض القياسي' : 'وضع المسرح'}</span>
             </button>
           )}
 
           <button
             type="button"
             onClick={handleToggleFullscreen}
-            className="px-3 py-2 rounded-xl bg-[#090b0f] hover:bg-stone-800 border border-stone-800 text-xs font-bold text-stone-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
+            className="px-3 py-1.5 rounded-[2px] bg-[var(--bg-canvas)] hover:bg-[var(--bg-elevated)] border border-[var(--border-hairline)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1.5 transition-colors cursor-pointer"
           >
-            <Maximize className="w-3.5 h-3.5 text-emerald-400" />
+            <Maximize className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
             <span className="hidden sm:inline">ملء الشاشة</span>
           </button>
 
@@ -1002,71 +1014,60 @@ export const WatchRoomPage: React.FC = () => {
               navigator.clipboard.writeText(window.location.href);
               showToast('تم نسخ رابط القناة');
             }}
-            className="p-2 rounded-xl bg-[#090b0f] hover:bg-stone-800 border border-stone-800 text-stone-300 hover:text-white transition cursor-pointer"
-            title="نسخ رابط القناة"
+            className="p-1.5 rounded-[2px] bg-[var(--bg-canvas)] hover:bg-[var(--bg-elevated)] border border-[var(--border-hairline)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+            title="نسخ الرابط"
           >
             <Share2 className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* 4. Compact Related Channels Strip */}
+      {/* 4. RELATED CHANNELS SWITCHING MATRIX */}
       <section className="space-y-3 pt-2">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm sm:text-base font-extrabold text-white flex items-center gap-2">
-            <Tv className="w-4 h-4 text-purple-400" />
-            <span>قنوات رياضية ذات صلة</span>
-          </h2>
-          <div className="flex items-center gap-3 text-xs">
+        <div className="flex items-center justify-between border-b border-[var(--border-hairline)] pb-2">
+          <div className="flex items-center gap-2">
+            <span className="w-1 h-4 bg-[var(--accent-primary)]" />
+            <h2 className="font-display-ar text-sm sm:text-base font-extrabold text-[var(--text-primary)]">
+              قنوات ناقلة أخرى على نفس الحزمة
+            </h2>
+          </div>
+          <div className="flex items-center gap-4 text-xs">
             <button
               type="button"
               onClick={() => navigate('/schedual')}
-              className="text-stone-400 hover:text-white flex items-center gap-1 transition cursor-pointer"
+              className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-semibold transition-colors cursor-pointer"
             >
-              <Calendar className="w-3.5 h-3.5 text-emerald-400" />
-              <span>جدول المباريات</span>
+              جدول المباريات
             </button>
             <button
               type="button"
               onClick={() => navigate('/home')}
-              className="text-emerald-400 hover:underline font-bold cursor-pointer"
+              className="text-[var(--accent-primary)] hover:underline font-bold cursor-pointer"
             >
-              كل القنوات ←
+              دليل القنوات الكامل ←
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
-          {relatedChannels.map(ch => {
-            const relBrand = getChannelBrandIdentity(ch);
-            return (
-              <button
-                key={ch.id}
-                type="button"
-                onClick={() => navigate(`/watchroom/${ch.id}`)}
-                className="group rounded-xl border border-stone-800 hover:border-stone-600 bg-[#101218] overflow-hidden text-right transition cursor-pointer flex flex-col justify-between"
-              >
-                <div
-                  className="h-14 p-2.5 flex items-center justify-between text-white bg-cover bg-center"
-                  style={{
-                    backgroundImage: `${relBrand.svgPatternUrl}, ${relBrand.backgroundCss}`
-                  }}
-                >
-                  <span
-                    className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded font-extrabold ${relBrand.badgeBg}`}
-                  >
-                    {relBrand.channelShortCode}
-                  </span>
-                  <Play className="w-3.5 h-3.5 text-white fill-current opacity-80 group-hover:opacity-100" />
-                </div>
-                <div className="p-2.5">
-                  <div className="text-xs font-bold text-stone-100 truncate group-hover:text-emerald-400 transition">
-                    {ch.arabicName || ch.name}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+        <div className="border-t border-r border-[var(--border-hairline)] grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8">
+          {relatedChannels.map(ch => (
+            <button
+              key={ch.id}
+              type="button"
+              onClick={() => navigate(`/watchroom/${ch.id}`)}
+              className="group border-b border-l border-[var(--border-hairline)] bg-[var(--bg-surface)] hover:bg-[var(--bg-row-hover)] p-3 text-right transition-colors cursor-pointer flex flex-col justify-between gap-2"
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="font-display-num text-base font-extrabold text-[var(--accent-primary)]">
+                  #{String(ch.id).padStart(2, '0')}
+                </span>
+                <Play className="w-3 h-3 text-[var(--text-muted)] group-hover:text-[var(--accent-primary)] fill-current" />
+              </div>
+              <div className="text-xs font-bold text-[var(--text-primary)] truncate w-full">
+                {ch.arabicName || ch.name}
+              </div>
+            </button>
+          ))}
         </div>
       </section>
     </div>

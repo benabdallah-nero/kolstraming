@@ -1,179 +1,114 @@
 @import "tailwindcss";
 
-:root,
-html[data-theme="stadium"] {
-  --bg-canvas: #060908;
-  --bg-surface: #0d1311;
-  --bg-elevated: #131c18;
-  --bg-card-hover: #17231e;
-  --border-subtle: rgba(16, 185, 129, 0.16);
-  --border-strong: rgba(16, 185, 129, 0.38);
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --accent-primary: #10b981;
-  --accent-secondary: #059669;
-  --accent-contrast: #022c22;
-  --accent-soft: rgba(16, 185, 129, 0.14);
-  --accent-glow: rgba(16, 185, 129, 0.25);
-  --hero-gradient: radial-gradient(circle at 80% 15%, rgba(16, 185, 129, 0.22) 0%, rgba(6, 78, 59, 0.15) 42%, rgba(9, 13, 12, 0.96) 100%);
-  --ambient-top: radial-gradient(ellipse 80% 45% at 50% -10%, rgba(16, 185, 129, 0.15), transparent 70%);
-}
+/*
+ * KOLSTREAM BROADCAST GRAPHICS PACKAGE SPECIFICATION
+ * 1. Concept: Live television football scoreboard & matchday programme with tight 1px hairline grids and hard edges (<= 4px radius).
+ * 2. Palette: Pitch-tinted dark slate canvas (#0c100e / #121815), sharp pitch-lime accent (#c8f526), and signal red (#ef233c) strictly for LIVE.
+ * 3. Typography: Barlow Condensed (tabular numerals) for oversized scores/times, Changa for Arabic display headers, and IBM Plex Sans Arabic for dense body data.
+ * 4. Layout: Asymmetric oversized featured match scoreboard paired with varied-height 1px hairline fixture and channel switching rows.
+ * 5. Details: Pulsing signal-red LIVE dot with tabular match minute, W/D/L team form squares, real-time kickoff countdowns, and sports-desk Arabic microcopy.
+ */
 
-html[data-theme="champions"] {
-  --bg-canvas: #050914;
-  --bg-surface: #0b1326;
-  --bg-elevated: #111d38;
-  --bg-card-hover: #162647;
-  --border-subtle: rgba(56, 189, 248, 0.18);
-  --border-strong: rgba(56, 189, 248, 0.42);
-  --text-primary: #f0f9ff;
-  --text-secondary: #93c5fd;
-  --text-muted: #64748b;
-  --accent-primary: #38bdf8;
-  --accent-secondary: #0284c7;
-  --accent-contrast: #082f49;
-  --accent-soft: rgba(56, 189, 248, 0.15);
-  --accent-glow: rgba(56, 189, 248, 0.28);
-  --hero-gradient: radial-gradient(circle at 80% 15%, rgba(56, 189, 248, 0.25) 0%, rgba(30, 58, 138, 0.22) 45%, rgba(7, 12, 26, 0.96) 100%);
-  --ambient-top: radial-gradient(ellipse 80% 45% at 50% -10%, rgba(56, 189, 248, 0.18), transparent 70%);
-}
-
-html[data-theme="royal"] {
-  --bg-canvas: #090806;
-  --bg-surface: #14110b;
-  --bg-elevated: #1f1a10;
-  --bg-card-hover: #292214;
-  --border-subtle: rgba(245, 158, 11, 0.18);
-  --border-strong: rgba(245, 158, 11, 0.44);
-  --text-primary: #fefce8;
-  --text-secondary: #d6d3d1;
-  --text-muted: #78716c;
-  --accent-primary: #f59e0b;
-  --accent-secondary: #d97706;
-  --accent-contrast: #271701;
-  --accent-soft: rgba(245, 158, 11, 0.15);
-  --accent-glow: rgba(245, 158, 11, 0.26);
-  --hero-gradient: radial-gradient(circle at 80% 15%, rgba(245, 158, 11, 0.24) 0%, rgba(120, 53, 15, 0.18) 45%, rgba(12, 10, 7, 0.96) 100%);
-  --ambient-top: radial-gradient(ellipse 80% 45% at 50% -10%, rgba(245, 158, 11, 0.15), transparent 70%);
-}
-
-html[data-theme="arena"] {
-  --bg-canvas: #0b0608;
-  --bg-surface: #160c10;
-  --bg-elevated: #221118;
-  --bg-card-hover: #2d1620;
-  --border-subtle: rgba(244, 63, 94, 0.18);
-  --border-strong: rgba(244, 63, 94, 0.44);
-  --text-primary: #fff1f2;
-  --text-secondary: #fda4af;
-  --text-muted: #881337;
-  --accent-primary: #f43f5e;
-  --accent-secondary: #e11d48;
-  --accent-contrast: #fff1f2;
-  --accent-soft: rgba(244, 63, 94, 0.15);
-  --accent-glow: rgba(244, 63, 94, 0.28);
-  --hero-gradient: radial-gradient(circle at 80% 15%, rgba(244, 63, 94, 0.25) 0%, rgba(136, 19, 55, 0.2) 45%, rgba(13, 7, 10, 0.96) 100%);
-  --ambient-top: radial-gradient(ellipse 80% 45% at 50% -10%, rgba(244, 63, 94, 0.16), transparent 70%);
+:root {
+  --bg-canvas: #090e0b;
+  --bg-surface: #0f1713;
+  --bg-elevated: #15201a;
+  --bg-row-hover: #1b2922;
+  --border-hairline: #1d2c23;
+  --border-strong: #2a3d31;
+  --text-primary: #f0f5f1;
+  --text-secondary: #9cb1a4;
+  --text-muted: #647a6d;
+  --accent-primary: #22c55e;
+  --accent-contrast: #041208;
+  --signal-live: #f43f5e;
+  --font-display-num: 'Barlow Condensed', sans-serif;
+  --font-display-ar: 'Changa', 'IBM Plex Sans Arabic', sans-serif;
+  --font-sans: 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 html[data-theme="daylight"] {
-  --bg-canvas: #f1f5f9;
+  --bg-canvas: #f6f8f6;
   --bg-surface: #ffffff;
-  --bg-elevated: #f8fafc;
-  --bg-card-hover: #f0fdf4;
-  --border-subtle: rgba(15, 23, 42, 0.1);
-  --border-strong: rgba(5, 150, 105, 0.4);
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  --accent-primary: #059669;
-  --accent-secondary: #047857;
+  --bg-elevated: #edf2ee;
+  --bg-row-hover: #e3ebe4;
+  --border-hairline: #dbe4dc;
+  --border-strong: #bacbbb;
+  --text-primary: #0f1a13;
+  --text-secondary: #485c50;
+  --text-muted: #728779;
+  --accent-primary: #16a34a;
   --accent-contrast: #ffffff;
-  --accent-soft: rgba(5, 150, 105, 0.1);
-  --accent-glow: rgba(5, 150, 105, 0.18);
-  --hero-gradient: radial-gradient(circle at 80% 15%, rgba(16, 185, 129, 0.16) 0%, rgba(226, 232, 240, 0.65) 50%, #ffffff 100%);
-  --ambient-top: radial-gradient(ellipse 80% 45% at 50% -10%, rgba(16, 185, 129, 0.12), transparent 70%);
+  --signal-live: #e11d48;
 }
 
 body {
   background-color: var(--bg-canvas);
   color: var(--text-primary);
-  transition: background-color 0.25s ease, color 0.25s ease;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
 }
 
+.font-display-num,
 .font-mono-num {
+  font-family: var(--font-display-num);
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.font-display-ar {
+  font-family: var(--font-display-ar);
+  letter-spacing: -0.01em;
 }
 
 .theme-canvas {
   background-color: var(--bg-canvas);
-  background-image: var(--ambient-top);
-  background-repeat: no-repeat;
   color: var(--text-primary);
 }
 
 .theme-surface {
   background-color: var(--bg-surface);
-  border-color: var(--border-subtle);
+  border-color: var(--border-hairline);
   color: var(--text-primary);
 }
 
 .theme-elevated {
   background-color: var(--bg-elevated);
-  border-color: var(--border-subtle);
+  border-color: var(--border-hairline);
 }
 
-.theme-hero {
-  background: var(--hero-gradient);
-  border-color: var(--border-strong);
-}
-
-.theme-card {
+.broadcast-panel {
   background-color: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  border: 1px solid var(--border-hairline);
+  border-radius: 12px;
 }
 
-.theme-card:hover {
-  background-color: var(--bg-card-hover);
-  border-color: var(--border-strong);
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px -10px var(--accent-glow);
+.broadcast-row {
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-hairline);
+  transition: all 140ms ease;
 }
 
-.theme-accent-btn {
-  background-color: var(--accent-primary);
-  color: var(--accent-contrast);
-  box-shadow: 0 6px 20px -4px var(--accent-glow);
+.broadcast-row:hover {
+  background-color: var(--bg-row-hover);
 }
 
-.theme-accent-btn:hover {
-  filter: brightness(1.08);
+@keyframes livePulseDot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.88);
+  }
 }
 
-.theme-accent-badge {
-  background-color: var(--accent-soft);
-  color: var(--accent-primary);
-  border: 1px solid var(--border-strong);
-}
-
-.theme-accent-text {
-  color: var(--accent-primary);
-}
-
-/* Daylight mode adaptive overrides for secondary pages */
-html[data-theme="daylight"] header {
-  background-color: rgba(255, 255, 255, 0.92) !important;
-  border-color: rgba(15, 23, 42, 0.08) !important;
-  color: #0f172a !important;
-}
-
-html[data-theme="daylight"] footer {
-  background-color: #ffffff !important;
-  border-color: rgba(15, 23, 42, 0.08) !important;
-  color: #475569 !important;
+.live-dot-pulse {
+  background-color: var(--signal-live);
+  animation: livePulseDot 1.4s ease-in-out infinite;
 }
 
 .no-scrollbar::-webkit-scrollbar {

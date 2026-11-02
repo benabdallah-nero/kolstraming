@@ -182,8 +182,9 @@ interface DliveCatalogData {
 }
 
 // Scrape DaddyLive All Soccer Events Catalog (https://dlive.sx/index.php?cat=All+Soccer+Events+%E2%9A%BD)
-async function fetchDliveSoccerCatalog(): Promise<DliveCatalogData> {
-  const cached = getCached<DliveCatalogData>('dlive_soccer_catalog_v2', 3 * 60 * 1000);
+async function fetchDliveSoccerCatalog(targetDateKey: 'yesterday' | 'today' | 'tomorrow' = 'today'): Promise<DliveCatalogData> {
+  const cacheKey = `dlive_soccer_catalog_v5_${targetDateKey}`;
+  const cached = getCached<DliveCatalogData>(cacheKey, 2 * 60 * 1000);
   if (cached) return cached;
 
   const events: DliveSoccerEvent[] = [];
@@ -197,128 +198,184 @@ async function fetchDliveSoccerCatalog(): Promise<DliveCatalogData> {
 
     if (res.ok) {
       const html = await res.text();
-      const blocks = html.split(/<div class="schedule__event">/);
       const now = new Date();
       const nowUtcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
 
-      for (let i = 1; i < blocks.length; i++) {
-        const block = blocks[i];
-        const rawTime = block.match(/class="schedule__time"[^>]*>(.*?)<\/span>/)?.[1]?.trim() || '00:00';
-        const rawTitle = block.match(/class="schedule__eventTitle"[^>]*>([\s\S]*?)<\/span>/)?.[1] || '';
-        const cleanTitle = decodeHtmlEntities(rawTitle.replace(/<[^>]+>/g, ''));
-        if (!cleanTitle || !cleanTitle.toLowerCase().includes(' vs ')) continue;
+      // Calculate target calendar date in UTC/GMT
+      const targetDate = new Date();
+      if (targetDateKey === 'yesterday') targetDate.setUTCDate(targetDate.getUTCDate() - 1);
+      else if (targetDateKey === 'tomorrow') targetDate.setUTCDate(targetDate.getUTCDate() + 1);
 
-        if (/israel|maccabi|hapoel|beitar|bnei sakhnin/i.test(cleanTitle)) continue;
+      const targetDay = targetDate.getUTCDate();
+      const targetMonth = targetDate.getUTCMonth(); // 0-11
+      const targetYear = targetDate.getUTCFullYear();
+      const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
-        let competition = 'مباريات كرة القدم العالمية';
-        let teamsPart = cleanTitle;
-        const colonIdx = cleanTitle.indexOf(':');
-        if (colonIdx !== -1) {
-          competition = cleanTitle.slice(0, colonIdx).trim();
-          teamsPart = cleanTitle.slice(colonIdx + 1).trim();
+      // Split into day blocks: <div class="schedule__day">
+      const daySections = html.split(/<div class="schedule__day">/i);
+
+      for (let d = 1; d < daySections.length; d++) {
+        const daySection = daySections[d];
+        const dayTitleMatch = daySection.match(/class="schedule__dayTitle">([^<]+)/i);
+        const dayTitle = dayTitleMatch ? dayTitleMatch[1].trim() : '';
+
+        // Parse date from e.g. "Monday 02nd Nov 2026 - Schedule Time UK GMT"
+        const dm = dayTitle.match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s+(\d{4})/i);
+        let isTargetDay = false;
+        let dayDiff = 0; // 0 = today, -1 = yesterday, 1 = tomorrow
+        if (dm) {
+          const parsedDay = parseInt(dm[1], 10);
+          const parsedMonth = monthNames.indexOf(dm[2].slice(0, 3).toLowerCase());
+          const parsedYear = parseInt(dm[3], 10);
+          isTargetDay = parsedDay === targetDay && parsedMonth === targetMonth && parsedYear === targetYear;
+          const eventDate = new Date(Date.UTC(parsedYear, parsedMonth, parsedDay));
+          const todayDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+          dayDiff = Math.round((eventDate.getTime() - todayDate.getTime()) / (24 * 3600 * 1000));
+        } else if (targetDateKey === 'today' && d === 1) {
+          isTargetDay = true;
         }
 
-        const vsParts = teamsPart.split(/\s+vs\s+/i);
-        if (vsParts.length < 2) continue;
-        const teamA = vsParts[0].trim();
-        const teamB = vsParts.slice(1).join(' vs ').trim();
+        const blocks = daySection.split(/<div class="schedule__event">/i);
 
-        const [hhStr, mmStr] = rawTime.split(':');
-        const gmtH = parseInt(hhStr || '0', 10);
-        const gmtM = parseInt(mmStr || '0', 10);
-        const gmtMinutes = gmtH * 60 + gmtM;
-        const meccaH = (gmtH + 3) % 24;
-        const meccaTime = `${String(meccaH).padStart(2, '0')}:${String(gmtM).padStart(2, '0')}`;
+        for (let i = 1; i < blocks.length; i++) {
+          const block = blocks[i];
+          const rawTime = block.match(/class="schedule__time"[^>]*>(.*?)<\/span>/)?.[1]?.trim() || '00:00';
+          const rawTitle = block.match(/class="schedule__eventTitle"[^>]*>([\s\S]*?)<\/span>/)?.[1] || '';
+          const cleanTitle = decodeHtmlEntities(rawTitle.replace(/<[^>]+>/g, ''));
+          if (!cleanTitle || !cleanTitle.toLowerCase().includes(' vs ')) continue;
 
-        // Calculate status from UTC kickoff time
-        let diff = nowUtcMinutes - gmtMinutes;
-        if (diff < -720) diff += 1440;
-        let status: 'LIVE' | 'FIXTURE' | 'RESULT' = 'FIXTURE';
-        let statusText = 'لم تبدأ بعد';
-        let minute: string | null = null;
+          if (/israel|maccabi|hapoel|beitar|bnei sakhnin/i.test(cleanTitle)) continue;
 
-        if (diff >= 0 && diff <= 115) {
-          status = 'LIVE';
-          if (diff <= 45) {
-            statusText = 'الشوط الأول';
-            minute = `${Math.max(1, diff)}'`;
-          } else if (diff <= 60) {
-            statusText = 'استراحة ما بين الشوطين';
-            minute = 'HT';
-          } else {
-            const secHalfMin = Math.min(90, 45 + (diff - 60));
-            statusText = 'الشوط الثاني';
-            minute = `${secHalfMin}'`;
+          let competition = 'مباريات كرة القدم العالمية';
+          let teamsPart = cleanTitle;
+          const colonIdx = cleanTitle.indexOf(':');
+          if (colonIdx !== -1) {
+            competition = cleanTitle.slice(0, colonIdx).trim();
+            teamsPart = cleanTitle.slice(colonIdx + 1).trim();
           }
-        } else if (diff > 115 && diff < 600) {
-          status = 'RESULT';
-          statusText = 'انتهت';
-        }
 
-        const chLinks = [...block.matchAll(/href=["']\/watch\.php\?id=(\d+)["'][^>]*>([\s\S]*?)<\/a>/g)];
-        const eventChannels: Array<{ channel_id: number; channel_name: string; quality: string; isBeinArabic: boolean }> = [];
-        const seenInEvent = new Set<number>();
+          const vsParts = teamsPart.split(/\s+vs\s+/i);
+          if (vsParts.length < 2) continue;
+          const teamA = vsParts[0].trim();
+          const teamB = vsParts.slice(1).join(' vs ').trim();
 
-        for (const m of chLinks) {
-          const chId = parseInt(m[1], 10);
-          const chName = decodeHtmlEntities(m[2].replace(/<[^>]+>/g, ''));
-          if (!chId || !chName || seenInEvent.has(chId) || isExcludedChannelName(chName)) continue;
-          seenInEvent.add(chId);
+          const [hhStr, mmStr] = rawTime.split(':');
+          const gmtH = parseInt(hhStr || '0', 10);
+          const gmtM = parseInt(mmStr || '0', 10);
+          const gmtMinutes = gmtH * 60 + gmtM;
+          const meccaH = (gmtH + 3) % 24;
+          const meccaTime = `${String(meccaH).padStart(2, '0')}:${String(gmtM).padStart(2, '0')}`;
 
-          const isBeinAr = (chId >= 91 && chId <= 99) || chId === 578 || /bein\s*sports\s*mena\s*[1-9]\b/i.test(chName);
-          const displayName = isBeinAr && chId >= 91 && chId <= 99 ? `beIN Sports ${chId - 90} HD` : chName;
+          const chLinks = [...block.matchAll(/href=["']\/watch\.php\?id=(\d+)["'][^>]*>([\s\S]*?)<\/a>/g)];
+          const eventChannels: Array<{ channel_id: number; channel_name: string; quality: string; isBeinArabic: boolean }> = [];
+          const seenInEvent = new Set<number>();
 
-          eventChannels.push({
-            channel_id: chId,
-            channel_name: displayName,
-            quality: '1080p FHD',
-            isBeinArabic: isBeinAr
+          for (const m of chLinks) {
+            const chId = parseInt(m[1], 10);
+            const chName = decodeHtmlEntities(m[2].replace(/<[^>]+>/g, ''));
+            if (!chId || !chName || seenInEvent.has(chId) || isExcludedChannelName(chName)) continue;
+            seenInEvent.add(chId);
+
+            const isBeinAr = (chId >= 91 && chId <= 99) || chId === 578 || /bein\s*sports\s*mena\s*[1-9]\b/i.test(chName);
+            const displayName = isBeinAr && chId >= 91 && chId <= 99 ? `beIN Sports ${chId - 90} HD` : chName;
+
+            eventChannels.push({
+              channel_id: chId,
+              channel_name: displayName,
+              quality: '1080p FHD',
+              isBeinArabic: isBeinAr
+            });
+
+            // Register discovered channel across all day blocks so no channels are missed
+            const existing = channelMap.get(chId);
+            const isGenericEventStream = /event\s*(sd\s*)?stream/i.test(chName);
+            if (!existing || (/event\s*(sd\s*)?stream/i.test(existing.name) && !isGenericEventStream)) {
+              const { category, subcat, lang } = categorizeChannel(chName);
+              const finalName = isGenericEventStream ? `${chName} #${chId} (${teamA} vs ${teamB})` : chName;
+              channelMap.set(chId, {
+                id: chId,
+                name: finalName,
+                category,
+                subcat,
+                quality: '1080p FHD',
+                lang,
+                country: 'Global',
+                description: `${competition}: ${teamA} vs ${teamB} (${meccaTime} بتوقيت مكة)`
+              });
+            }
+          }
+
+          const diff = nowUtcMinutes - gmtMinutes;
+          const isCurrentlyLive = diff >= 0 && diff <= 125;
+
+          // Inclusion logic: NEVER drop an active live match or match kicking off soon for today!
+          let shouldInclude = false;
+          if (targetDateKey === 'today') {
+            if (isCurrentlyLive || isTargetDay || (dayDiff <= 0 && diff >= -60 && diff <= 125)) {
+              shouldInclude = true;
+            }
+          } else if (targetDateKey === 'yesterday') {
+            if ((isTargetDay || dayDiff < 0) && !isCurrentlyLive && diff > 125) {
+              shouldInclude = true;
+            }
+          } else if (targetDateKey === 'tomorrow') {
+            if (isTargetDay || dayDiff > 0) {
+              shouldInclude = true;
+            }
+          }
+
+          if (!shouldInclude) continue;
+
+          let status: 'LIVE' | 'FIXTURE' | 'RESULT' = 'FIXTURE';
+          let statusText = 'لم تبدأ بعد';
+          let minute: string | null = null;
+
+          if (isCurrentlyLive && targetDateKey === 'today') {
+            status = 'LIVE';
+            if (diff <= 45) {
+              statusText = 'الشوط الأول';
+              minute = `${Math.max(1, diff)}'`;
+            } else if (diff <= 60) {
+              statusText = 'استراحة ما بين الشوطين';
+              minute = 'HT';
+            } else {
+              const secHalfMin = Math.min(90, 45 + (diff - 60));
+              statusText = 'الشوط الثاني';
+              minute = `${secHalfMin}'`;
+            }
+          } else if (targetDateKey === 'yesterday' || (targetDateKey === 'today' && diff > 125 && isTargetDay)) {
+            status = 'RESULT';
+            statusText = 'انتهت';
+          } else {
+            status = 'FIXTURE';
+            statusText = 'لم تبدأ بعد';
+          }
+
+          eventChannels.sort((a, b) => {
+            const score = (c: { channel_id: number; channel_name: string; isBeinArabic: boolean }) => {
+              if (c.isBeinArabic) return 100;
+              if (/bein/i.test(c.channel_name)) return 80;
+              if (/sky|tnt|dazn|paramount|canal\+|arena|espn|cbs|eurosport|sport tv|premier/i.test(c.channel_name)) return 60;
+              if (/event/i.test(c.channel_name)) return 10;
+              return 40;
+            };
+            return score(b) - score(a);
           });
 
-          // Register discovered channel if not already registered or if previous name was generic "Event Stream"
-          const existing = channelMap.get(chId);
-          const isGenericEventStream = /event\s*(sd\s*)?stream/i.test(chName);
-          if (!existing || (/event\s*(sd\s*)?stream/i.test(existing.name) && !isGenericEventStream)) {
-            const { category, subcat, lang } = categorizeChannel(chName);
-            const finalName = isGenericEventStream ? `${chName} #${chId} (${teamA} vs ${teamB})` : chName;
-            channelMap.set(chId, {
-              id: chId,
-              name: finalName,
-              category,
-              subcat,
-              quality: '1080p FHD',
-              lang,
-              country: 'Global',
-              description: `${competition}: ${teamA} vs ${teamB} (${meccaTime} بتوقيت مكة)`
-            });
-          }
+          events.push({
+            id: `dlive_ev_${d}_${i}_${gmtMinutes}`,
+            gmtTime: rawTime,
+            meccaTime,
+            gmtMinutes,
+            competition,
+            teamA,
+            teamB,
+            status,
+            statusText,
+            minute,
+            channels: eventChannels
+          });
         }
-
-        // Sort channels: beIN Arabic first, then beIN Global/European named channels, then Event Streams
-        eventChannels.sort((a, b) => {
-          const score = (c: { channel_id: number; channel_name: string; isBeinArabic: boolean }) => {
-            if (c.isBeinArabic) return 100;
-            if (/bein/i.test(c.channel_name)) return 80;
-            if (/sky|tnt|dazn|paramount|canal\+|arena|espn|cbs|eurosport|sport tv|premier/i.test(c.channel_name)) return 60;
-            if (/event/i.test(c.channel_name)) return 10;
-            return 40;
-          };
-          return score(b) - score(a);
-        });
-
-        events.push({
-          id: `dlive_ev_${i}_${gmtMinutes}`,
-          gmtTime: rawTime,
-          meccaTime,
-          gmtMinutes,
-          competition,
-          teamA,
-          teamB,
-          status,
-          statusText,
-          minute,
-          channels: eventChannels
-        });
       }
     }
   } catch {
@@ -330,7 +387,7 @@ async function fetchDliveSoccerCatalog(): Promise<DliveCatalogData> {
     discoveredChannels: Array.from(channelMap.values())
   };
   if (events.length > 0) {
-    setCache('dlive_soccer_catalog_v2', result);
+    setCache(cacheKey, result);
   }
   return result;
 }
@@ -577,7 +634,7 @@ const espnEventLookupMap = new Map<string, string>();
 app.get('/api/live-matches', async (req: Request, res: Response) => {
   const rawDate = String(req.query.date || 'today').toLowerCase();
   const { dateKey, ykDate, espnDate } = getTargetDateFormats(rawDate);
-  const cacheKey = `live_matches_realtime_v4_${dateKey}`;
+  const cacheKey = `live_matches_realtime_v5_${dateKey}`;
   const cacheTtl = dateKey === 'today' ? 20 * 1000 : 120 * 1000;
 
   const cachedMatches = getCached<any>(cacheKey, cacheTtl);
@@ -653,17 +710,14 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
   };
 
   try {
-    const ykUrl =
-      dateKey === 'today'
-        ? 'https://www.yallakora.com/matches-center'
-        : `https://www.yallakora.com/matches-center?date=${encodeURIComponent(ykDate)}`;
+    const ykUrl = `https://www.yallakora.com/matches-center?date=${encodeURIComponent(ykDate)}`;
 
     const [ykRes, dliveCatalog, espnRes] = await Promise.allSettled([
       fetch(ykUrl, {
         headers: { 'User-Agent': UA, 'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8' },
         signal: AbortSignal.timeout(4000)
       }),
-      dateKey === 'today' ? fetchDliveSoccerCatalog() : Promise.resolve({ events: [], discoveredChannels: [] }),
+      fetchDliveSoccerCatalog(dateKey),
       fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?dates=${espnDate}`, {
         headers: { 'User-Agent': UA },
         signal: AbortSignal.timeout(4000)

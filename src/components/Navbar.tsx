@@ -1,16 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import {
-  Tv,
-  PlayCircle,
-  Calendar,
-  Trophy,
-  Search,
-  X,
-  Play,
-  Clock
-} from 'lucide-react';
+import { Search, X, Play } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { formatBroadcastMinute } from '../utils/broadcastFormatters';
 
 export const Navbar: React.FC = () => {
   const {
@@ -27,7 +19,6 @@ export const Navbar: React.FC = () => {
 
   const liveMatchesCount = matches.filter(m => m.status === 'LIVE').length;
 
-  // Global Ctrl+K / Cmd+K shortcut for Quick Search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -49,7 +40,6 @@ export const Navbar: React.FC = () => {
     }
   }, [isCommandPaletteOpen]);
 
-  // Quick search results
   const quickResults = useMemo(() => {
     const q = quickQuery.trim().toLowerCase();
     if (!q) {
@@ -86,129 +76,135 @@ export const Navbar: React.FC = () => {
   return (
     <>
       <header
-        className="backdrop-blur-xl border-b border-stone-800/80 bg-[#090b0f]/90 sticky top-0 z-40 select-none text-stone-100"
+        className="bg-[var(--bg-surface)] border-b border-[var(--border-hairline)] sticky top-0 z-40 select-none text-[var(--text-primary)]"
         dir="rtl"
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          {/* Zone 1: Clean Brand Wordmark */}
-          <div
-            onClick={() => navigate('/home')}
-            className="flex items-center gap-2.5 cursor-pointer active:opacity-80 transition-opacity shrink-0"
-          >
-            <div className="w-9 h-9 rounded-xl bg-purple-600/20 border border-purple-500/40 text-purple-400 flex items-center justify-center shadow-sm">
-              <Tv className="w-4 h-4" />
-            </div>
-            <span className="font-mono-num text-lg font-extrabold tracking-tight text-white">
-              kolstream
-            </span>
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 flex items-stretch justify-between">
+          {/* Right Compartment: Broadcast Bug Wordmark + Navigation Tabs */}
+          <div className="flex items-stretch">
+            <button
+              type="button"
+              onClick={() => navigate('/home')}
+              className="flex items-center gap-2.5 pl-5 border-l border-[var(--border-hairline)] cursor-pointer group text-right"
+            >
+              <span className="w-1.5 h-6 bg-[var(--accent-primary)] shrink-0" />
+              <div className="flex flex-col leading-none">
+                <span className="font-display-num text-2xl font-extrabold tracking-wider uppercase text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors">
+                  KOLSTREAM
+                </span>
+                <span className="text-[9px] font-display-num uppercase tracking-widest text-[var(--text-muted)]">
+                  LIVE FEED 24/7
+                </span>
+              </div>
+            </button>
+
+            {/* Primary Broadcast Tabs with Sliding Active Bottom Bar */}
+            <nav className="hidden md:flex items-stretch">
+              <NavLink
+                to="/home"
+                className={({ isActive }) =>
+                  `h-full px-5 flex items-center gap-2 text-xs font-bold border-l border-[var(--border-hairline)] border-b-[3px] transition-colors whitespace-nowrap ${
+                    isActive
+                      ? 'border-b-[var(--accent-primary)] bg-[var(--bg-elevated)] text-[var(--accent-primary)]'
+                      : 'border-b-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]/50'
+                  }`
+                }
+              >
+                <span className="font-display-ar text-sm font-bold">الرئيسية والقنوات</span>
+              </NavLink>
+
+              <NavLink
+                to="/schedual"
+                className={({ isActive }) =>
+                  `h-full px-5 flex items-center gap-2 text-xs font-bold border-l border-[var(--border-hairline)] border-b-[3px] transition-colors whitespace-nowrap ${
+                    isActive
+                      ? 'border-b-[var(--accent-primary)] bg-[var(--bg-elevated)] text-[var(--accent-primary)]'
+                      : 'border-b-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]/50'
+                  }`
+                }
+              >
+                <span className="font-display-ar text-sm font-bold">جدول المباريات</span>
+                {liveMatchesCount > 0 && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] bg-[var(--signal-live)] text-white font-display-num text-xs font-extrabold leading-none">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                    <span>{liveMatchesCount}</span>
+                  </span>
+                )}
+              </NavLink>
+
+              <NavLink
+                to="/leagues"
+                className={({ isActive }) =>
+                  `h-full px-5 flex items-center gap-2 text-xs font-bold border-l border-[var(--border-hairline)] border-b-[3px] transition-colors whitespace-nowrap ${
+                    isActive
+                      ? 'border-b-[var(--accent-primary)] bg-[var(--bg-elevated)] text-[var(--accent-primary)]'
+                      : 'border-b-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]/50'
+                  }`
+                }
+              >
+                <span className="font-display-ar text-sm font-bold">ترتيب الدوريات</span>
+              </NavLink>
+
+              <NavLink
+                to="/watchroom"
+                className={({ isActive }) =>
+                  `h-full px-5 flex items-center gap-2 text-xs font-bold border-l border-[var(--border-hairline)] border-b-[3px] transition-colors whitespace-nowrap ${
+                    isActive
+                      ? 'border-b-[var(--accent-primary)] bg-[var(--bg-elevated)] text-[var(--accent-primary)]'
+                      : 'border-b-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]/50'
+                  }`
+                }
+              >
+                <span className="font-display-ar text-sm font-bold">غرفة البث</span>
+              </NavLink>
+            </nav>
           </div>
 
-          {/* Zone 2: Primary Page Links */}
-          <nav className="hidden md:flex items-center gap-1.5 bg-[#12151c] border border-stone-800/80 p-1 rounded-xl">
-            <NavLink
-              to="/home"
-              className={({ isActive }) =>
-                `flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${
-                  isActive
-                    ? 'bg-emerald-500 text-stone-950 shadow-sm'
-                    : 'text-stone-300 hover:text-white'
-                }`
-              }
-            >
-              <Tv className="w-3.5 h-3.5" />
-              <span>الرئيسية والقنوات</span>
-            </NavLink>
-
-            <NavLink
-              to="/schedual"
-              className={({ isActive }) =>
-                `flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${
-                  isActive
-                    ? 'bg-emerald-500 text-stone-950 shadow-sm'
-                    : 'text-stone-300 hover:text-white'
-                }`
-              }
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>المباريات والنتائج</span>
-              {liveMatchesCount > 0 && (
-                <span className="text-[10px] bg-rose-500 text-white font-mono-num px-1.5 py-0.2 rounded-full font-bold">
-                  {liveMatchesCount}
-                </span>
-              )}
-            </NavLink>
-
-            <NavLink
-              to="/leagues"
-              className={({ isActive }) =>
-                `flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${
-                  isActive
-                    ? 'bg-emerald-500 text-stone-950 shadow-sm'
-                    : 'text-stone-300 hover:text-white'
-                }`
-              }
-            >
-              <Trophy className="w-3.5 h-3.5" />
-              <span>البطولات والترتيب</span>
-            </NavLink>
-
-            <NavLink
-              to="/watchroom"
-              className={({ isActive }) =>
-                `flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${
-                  isActive
-                    ? 'bg-emerald-500 text-stone-950 shadow-sm'
-                    : 'text-stone-300 hover:text-white'
-                }`
-              }
-            >
-              <PlayCircle className="w-3.5 h-3.5" />
-              <span>غرفة المشاهدة</span>
-            </NavLink>
-          </nav>
-
-          {/* Zone 3: Quick Search Trigger */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Left Compartment: Quick Search Trigger */}
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setCommandPaletteOpen(true)}
-              className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-[#12151c] hover:bg-stone-800/80 border border-stone-800 text-xs text-stone-300 hover:text-white transition cursor-pointer"
-              title="بحث في القنوات والمباريات"
+              className="flex items-center gap-3 px-3.5 py-1.5 rounded-[2px] bg-[var(--bg-canvas)] hover:bg-[var(--bg-elevated)] border border-[var(--border-hairline)] hover:border-[var(--border-strong)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+              title="بحث سريع في القنوات والمباريات"
             >
-              <Search className="w-3.5 h-3.5 text-emerald-400" />
-              <span>بحث عن قناة أو مباراة...</span>
+              <Search className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
+              <span>بحث عن فريق أو قناة...</span>
+              <span className="hidden sm:inline font-display-num text-[11px] px-1.5 py-0.5 bg-[var(--bg-surface)] border border-[var(--border-hairline)] text-[var(--text-muted)]">
+                CTRL+K
+              </span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* Quick Search Modal */}
+      {/* Broadcast Quick Search Modal */}
       {isCommandPaletteOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start justify-center pt-14 sm:pt-20 px-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 bg-black/80 flex items-start justify-center pt-12 sm:pt-20 px-3"
           dir="rtl"
           onClick={() => setCommandPaletteOpen(false)}
         >
           <div
             onClick={e => e.stopPropagation()}
-            className="w-full max-w-2xl bg-[#111318] border border-stone-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
+            className="w-full max-w-2xl bg-[var(--bg-surface)] border border-[var(--border-strong)] rounded-[2px] overflow-hidden flex flex-col max-h-[82vh]"
           >
-            {/* Search Input Bar */}
-            <div className="p-3.5 border-b border-stone-800 flex items-center gap-3 bg-[#15181f]">
-              <Search className="w-4 h-4 text-emerald-400 shrink-0" />
+            {/* Search Input Header */}
+            <div className="p-3.5 border-b border-[var(--border-hairline)] flex items-center gap-3 bg-[var(--bg-elevated)]">
+              <Search className="w-4 h-4 text-[var(--accent-primary)] shrink-0" />
               <input
                 ref={searchInputRef}
                 type="text"
                 value={quickQuery}
                 onChange={e => setQuickQuery(e.target.value)}
-                placeholder="ابحث عن قناة (مثل beIN 1 أو Eurosport) أو اسم فريق..."
-                className="w-full bg-transparent text-xs sm:text-sm text-stone-100 placeholder-stone-500 focus:outline-none"
+                placeholder="اكتب اسم الفريق أو القناة (beIN 1، ريال مدريد، ليفربول...)"
+                className="w-full bg-transparent text-xs sm:text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none"
               />
               {quickQuery && (
                 <button
                   type="button"
                   onClick={() => setQuickQuery('')}
-                  className="text-xs text-stone-400 hover:text-stone-200 px-1.5 py-0.5 rounded bg-stone-800"
+                  className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-2 py-0.5 rounded-[2px] bg-[var(--bg-canvas)] border border-[var(--border-hairline)] cursor-pointer"
                 >
                   مسح
                 </button>
@@ -216,7 +212,7 @@ export const Navbar: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCommandPaletteOpen(false)}
-                className="p-1 rounded-lg text-stone-400 hover:text-stone-200 hover:bg-stone-800 transition"
+                className="p-1 rounded-[2px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-canvas)] transition-colors cursor-pointer"
                 aria-label="إغلاق البحث"
               >
                 <X className="w-4 h-4" />
@@ -224,52 +220,39 @@ export const Navbar: React.FC = () => {
             </div>
 
             {/* Results Body */}
-            <div className="p-3.5 overflow-y-auto space-y-4 text-xs">
-              {quickResults.recentList.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-stone-400">
-                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>شاهدت مؤخراً</span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {quickResults.recentList.map(ch => (
-                      <button
-                        key={ch.id}
-                        type="button"
-                        onClick={() => {
-                          setActiveStreamingChannel(ch);
-                          setCommandPaletteOpen(false);
-                          navigate(`/watchroom/${ch.id}`);
-                        }}
-                        className="p-2.5 rounded-xl bg-stone-900/90 hover:bg-stone-800 border border-stone-800 flex items-center justify-between gap-2 text-right transition cursor-pointer"
-                      >
-                        <div className="truncate font-bold text-stone-200">
-                          {ch.arabicName || ch.name}
-                        </div>
-                        <Play className="w-3.5 h-3.5 text-emerald-400 shrink-0 fill-current" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
+            <div className="overflow-y-auto divide-y divide-[var(--border-hairline)] text-xs">
               {quickResults.matches.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-[11px] font-bold text-stone-400">
-                    المباريات المباشرة ({quickResults.matches.length})
+                <div className="p-3.5 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-[var(--text-secondary)] uppercase">
+                    <span>المباريات المباشرة والمجدولة</span>
+                    <span className="font-display-num text-sm text-[var(--accent-primary)]">
+                      {quickResults.matches.length}
+                    </span>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="border border-[var(--border-hairline)] divide-y divide-[var(--border-hairline)]">
                     {quickResults.matches.map(m => (
                       <div
                         key={m.id}
-                        className="p-2.5 rounded-xl bg-stone-900/90 border border-stone-800/80 flex items-center justify-between gap-3"
+                        className="px-3 py-2.5 bg-[var(--bg-canvas)] hover:bg-[var(--bg-row-hover)] flex items-center justify-between gap-3 transition-colors"
                       >
-                        <div className="min-w-0">
-                          <div className="font-bold text-stone-100 truncate">
-                            {m.teamA.name} ضد {m.teamB.name}
-                          </div>
-                          <div className="text-[10px] text-stone-400 truncate mt-0.5">
-                            {m.competition} · {m.time}
+                        <div className="min-w-0 flex items-center gap-3">
+                          {m.status === 'LIVE' ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[var(--signal-live)] text-white font-display-num text-xs font-bold shrink-0">
+                              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                              <span>{formatBroadcastMinute(m.minute)}</span>
+                            </span>
+                          ) : (
+                            <span className="font-display-num text-sm font-bold text-[var(--text-secondary)] shrink-0">
+                              {m.time}
+                            </span>
+                          )}
+                          <div className="min-w-0">
+                            <div className="font-bold text-[var(--text-primary)] truncate">
+                              {m.teamA.name} — {m.teamB.name}
+                            </div>
+                            <div className="text-[10px] text-[var(--text-muted)] truncate">
+                              {m.competition}
+                            </div>
                           </div>
                         </div>
 
@@ -281,10 +264,10 @@ export const Navbar: React.FC = () => {
                               setCommandPaletteOpen(false);
                               navigate(`/watchroom/${cid}`);
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold text-[11px] shrink-0 flex items-center gap-1 cursor-pointer"
+                            className="px-3 py-1 rounded-[2px] bg-[var(--accent-primary)] text-[var(--accent-contrast)] font-extrabold text-[11px] shrink-0 flex items-center gap-1 cursor-pointer"
                           >
                             <Play className="w-3 h-3 fill-current" />
-                            <span>مشاهدة</span>
+                            <span>البث الحي</span>
                           </button>
                         )}
                       </div>
@@ -293,16 +276,48 @@ export const Navbar: React.FC = () => {
                 </div>
               )}
 
-              <div className="space-y-2">
-                <div className="text-[11px] font-bold text-stone-400">
-                  القنوات الرياضية ({quickResults.channels.length})
+              {quickResults.recentList.length > 0 && (
+                <div className="p-3.5 space-y-2">
+                  <div className="text-[11px] font-bold text-[var(--text-secondary)]">
+                    القنوات المشاهدة مؤخراً
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 border-t border-r border-[var(--border-hairline)]">
+                    {quickResults.recentList.map(ch => (
+                      <button
+                        key={ch.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveStreamingChannel(ch);
+                          setCommandPaletteOpen(false);
+                          navigate(`/watchroom/${ch.id}`);
+                        }}
+                        className="p-2.5 bg-[var(--bg-canvas)] hover:bg-[var(--bg-row-hover)] border-b border-l border-[var(--border-hairline)] flex items-center justify-between gap-2 text-right transition-colors cursor-pointer"
+                      >
+                        <div className="truncate font-bold text-[var(--text-primary)]">
+                          {ch.arabicName || ch.name}
+                        </div>
+                        <span className="font-display-num text-xs font-bold text-[var(--accent-primary)] shrink-0">
+                          CH {String(ch.id).padStart(2, '0')}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="p-3.5 space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-bold text-[var(--text-secondary)]">
+                  <span>دليل القنوات الناقلة</span>
+                  <span className="font-display-num text-sm text-[var(--text-muted)]">
+                    {quickResults.channels.length}
+                  </span>
                 </div>
                 {quickResults.channels.length === 0 ? (
-                  <div className="py-6 text-center text-stone-500">
-                    لا توجد نتائج مطابقة لبحثك "{quickQuery}"
+                  <div className="py-8 text-center text-[var(--text-muted)] border border-[var(--border-hairline)] bg-[var(--bg-canvas)]">
+                    لا توجد قناة أو مباراة تطابق "{quickQuery}" — جرب البحث باسم البطولة أو رقم القناة.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="border border-[var(--border-hairline)] divide-y divide-[var(--border-hairline)]">
                     {quickResults.channels.map(ch => (
                       <button
                         key={ch.id}
@@ -312,18 +327,23 @@ export const Navbar: React.FC = () => {
                           setCommandPaletteOpen(false);
                           navigate(`/watchroom/${ch.id}`);
                         }}
-                        className="p-2.5 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800/80 flex items-center justify-between gap-2 text-right transition cursor-pointer"
+                        className="w-full px-3 py-2 bg-[var(--bg-canvas)] hover:bg-[var(--bg-row-hover)] flex items-center justify-between gap-2 text-right transition-colors cursor-pointer"
                       >
-                        <div className="min-w-0">
-                          <div className="font-bold text-stone-100 truncate">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="font-display-num text-sm font-extrabold text-[var(--accent-primary)] w-12 shrink-0">
+                            #{String(ch.id).padStart(2, '0')}
+                          </span>
+                          <span className="font-bold text-[var(--text-primary)] truncate">
                             {ch.arabicName || ch.name}
-                          </div>
-                          <div className="text-[10px] text-stone-500">
-                            {ch.quality || '1080p FHD'} · {ch.lang || 'عربي'}
-                          </div>
+                          </span>
                         </div>
-                        <div className="p-1.5 rounded-lg bg-emerald-500 text-stone-950 shrink-0">
-                          <Play className="w-3.5 h-3.5 fill-current" />
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-display-num text-xs text-[var(--text-muted)]">
+                            {ch.quality || '1080p FHD'}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-[2px] bg-[var(--bg-elevated)] border border-[var(--border-hairline)] text-[var(--accent-primary)] text-[10px] font-bold">
+                            تشغيل
+                          </span>
                         </div>
                       </button>
                     ))}

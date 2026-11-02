@@ -1,6 +1,5 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Tv, PlayCircle, Calendar, Trophy } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export const BottomDock: React.FC = () => {
@@ -9,63 +8,72 @@ export const BottomDock: React.FC = () => {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#090b0f]/95 backdrop-blur-md border-t border-stone-800/80 px-2 py-2 flex items-center justify-around select-none"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--bg-surface)] border-t border-[var(--border-hairline)] grid grid-cols-4 h-14 select-none"
       dir="rtl"
       aria-label="شريط التنقل السفلي"
     >
       <NavLink
         to="/home"
         className={({ isActive }) =>
-          `flex flex-col items-center justify-center transition-colors relative py-1 px-3 rounded-lg ${
-            isActive ? 'text-emerald-400 font-bold' : 'text-stone-400 hover:text-stone-200'
+          `flex flex-col items-center justify-center border-l border-[var(--border-hairline)] border-t-[3px] transition-colors ${
+            isActive
+              ? 'border-t-[var(--accent-primary)] bg-[var(--bg-elevated)] text-[var(--accent-primary)] font-extrabold'
+              : 'border-t-transparent text-[var(--text-secondary)]'
           }`
         }
       >
-        <Tv className="w-4 h-4" />
-        <span className="text-[11px] mt-1">القنوات</span>
+        <span className="font-display-num text-[10px] uppercase tracking-wider opacity-70">CH</span>
+        <span className="font-display-ar text-xs">القنوات</span>
       </NavLink>
 
       <NavLink
         to="/schedual"
         className={({ isActive }) =>
-          `flex flex-col items-center justify-center transition-colors relative py-1 px-3 rounded-lg ${
-            isActive ? 'text-emerald-400 font-bold' : 'text-stone-400 hover:text-stone-200'
+          `flex flex-col items-center justify-center border-l border-[var(--border-hairline)] border-t-[3px] transition-colors relative ${
+            isActive
+              ? 'border-t-[var(--accent-primary)] bg-[var(--bg-elevated)] text-[var(--accent-primary)] font-extrabold'
+              : 'border-t-transparent text-[var(--text-secondary)]'
           }`
         }
       >
-        <div className="relative">
-          <Calendar className="w-4 h-4" />
+        <div className="flex items-center gap-1">
           {liveCount > 0 && (
-            <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-rose-500"></span>
+            <span className="w-1.5 h-1.5 rounded-full live-dot-pulse" />
           )}
+          <span className="font-display-num text-[10px] uppercase tracking-wider opacity-70">
+            {liveCount > 0 ? `LIVE ${liveCount}` : 'FIX'}
+          </span>
         </div>
-        <span className="text-[11px] mt-1">المباريات</span>
+        <span className="font-display-ar text-xs">المباريات</span>
       </NavLink>
 
       <NavLink
         to="/leagues"
         className={({ isActive }) =>
-          `flex flex-col items-center justify-center transition-colors relative py-1 px-3 rounded-lg ${
-            isActive ? 'text-emerald-400 font-bold' : 'text-stone-400 hover:text-stone-200'
+          `flex flex-col items-center justify-center border-l border-[var(--border-hairline)] border-t-[3px] transition-colors ${
+            isActive
+              ? 'border-t-[var(--accent-primary)] bg-[var(--bg-elevated)] text-[var(--accent-primary)] font-extrabold'
+              : 'border-t-transparent text-[var(--text-secondary)]'
           }`
         }
       >
-        <Trophy className="w-4 h-4" />
-        <span className="text-[11px] mt-1">الترتيب</span>
+        <span className="font-display-num text-[10px] uppercase tracking-wider opacity-70">TBL</span>
+        <span className="font-display-ar text-xs">الترتيب</span>
       </NavLink>
 
       <NavLink
         to="/watchroom"
         className={({ isActive }) =>
-          `flex flex-col items-center justify-center transition-colors relative py-1 px-3 rounded-lg ${
-            isActive ? 'text-emerald-400 font-bold' : 'text-stone-400 hover:text-stone-200'
+          `flex flex-col items-center justify-center border-t-[3px] transition-colors ${
+            isActive
+              ? 'border-t-[var(--accent-primary)] bg-[var(--bg-elevated)] text-[var(--accent-primary)] font-extrabold'
+              : 'border-t-transparent text-[var(--text-secondary)]'
           }`
         }
       >
-        <PlayCircle className="w-4 h-4" />
-        <span className="text-[11px] mt-1">المشغل</span>
+        <span className="font-display-num text-[10px] uppercase tracking-wider opacity-70">FEED</span>
+        <span className="font-display-ar text-xs">غرفة البث</span>
       </NavLink>
     </nav>
   );
 };
-

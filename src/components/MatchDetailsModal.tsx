@@ -2,17 +2,17 @@ import React, { useState, useEffect } from 'react';
 import {
   X,
   Play,
-  Trophy,
-  Clock,
-  Users,
-  BarChart3,
   Activity,
-  Shield,
-  ArrowLeftRight
+  BarChart3,
+  ArrowRightLeft
 } from 'lucide-react';
 import { LiveMatch, MatchDetailsData } from '../types';
 import { getApiUrl } from '../context/AppContext';
 import { buildMatchDetailsForMatch, fetchMatchDetailsWithFallback } from '../utils/footballData';
+import {
+  formatBroadcastMinute,
+  getKickoffCountdown
+} from '../utils/broadcastFormatters';
 
 interface MatchDetailsModalProps {
   match: LiveMatch | null;
@@ -25,16 +25,15 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
   onClose,
   onTuneIn
 }) => {
-  const [activeTab, setActiveTab] = useState<'events' | 'lineups' | 'stats'>('events');
+  const [activeTab, setActiveTab] = useState<'events' | 'stats'>('events');
   const [details, setDetails] = useState<MatchDetailsData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
   useEffect(() => {
     if (!match) return;
-    setActiveTab(match.status === 'FIXTURE' ? 'lineups' : 'events');
+    setActiveTab('events');
     setLoading(true);
 
-    // Build instant empty shell first so modal renders immediately while querying live data
     const instantDetails = buildMatchDetailsForMatch(match);
     setDetails(instantDetails);
 
@@ -79,26 +78,30 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
 
   const isLive = match.status === 'LIVE';
   const hasScore = match.scoreA !== null && match.scoreB !== null;
+  const countdown = getKickoffCountdown(match.time, match.status);
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4"
       dir="rtl"
       onClick={onClose}
     >
       <div
         onClick={e => e.stopPropagation()}
-        className="w-full max-w-3xl bg-[#101218] border border-stone-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]"
+        className="w-full max-w-3xl bg-[var(--bg-surface)] border border-[var(--border-hairline)] rounded-2xl overflow-hidden flex flex-col max-h-[90vh] shadow-2xl shadow-black/60"
       >
-        {/* Modal Header: Match Scoreboard */}
-        <div className="relative bg-gradient-to-br from-[#1d0738] via-[#12151f] to-[#0a0c12] p-4 sm:p-6 border-b border-stone-800">
-          <div className="flex items-center justify-between gap-2 mb-4">
-            <div className="flex items-center gap-2 text-xs font-bold text-purple-300">
-              <Trophy className="w-4 h-4 text-purple-400 shrink-0" />
-              <span>{match.competition}</span>
+        {/* 1. BROADCAST SCOREBOARD HEADER */}
+        <div className="bg-[var(--bg-canvas)] border-b border-[var(--border-hairline)]">
+          {/* Top Metadata Strip */}
+          <div className="px-5 py-3 bg-[var(--bg-elevated)] border-b border-[var(--border-hairline)] flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)]">
+              <span className="px-2.5 py-0.5 rounded-full bg-[var(--accent-primary)] text-[var(--accent-contrast)] font-display-num text-[11px] font-extrabold uppercase">
+                MATCH CENTRE
+              </span>
+              <span className="font-display-ar">{match.competition}</span>
               {details.stadium && (
-                <span className="text-stone-400 font-normal hidden sm:inline">
-                  · {details.stadium}
+                <span className="text-[var(--text-muted)] font-normal hidden sm:inline">
+                  | {details.stadium}
                 </span>
               )}
             </div>
@@ -106,81 +109,93 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-stone-200 transition cursor-pointer"
+              className="p-1.5 rounded-xl bg-[var(--bg-canvas)] hover:bg-[var(--signal-live)] border border-[var(--border-hairline)] text-[var(--text-secondary)] hover:text-white transition-all cursor-pointer"
               aria-label="إغلاق"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Teams & Score Row */}
-          <div className="flex items-center justify-between gap-3 sm:gap-6">
-            {/* Team A */}
-            <div className="flex-1 flex flex-col items-center text-center gap-2 min-w-0">
+          {/* Teams & Tabular Scoreline */}
+          <div className="p-5 sm:p-7 grid grid-cols-11 items-center gap-3 sm:gap-4">
+            {/* Team A (4 cols) */}
+            <div className="col-span-4 flex flex-col items-center text-center gap-2 min-w-0">
               {match.teamA.logo ? (
                 <img
                   src={match.teamA.logo}
                   alt={match.teamA.name}
-                  className="w-12 h-12 sm:w-16 sm:h-16 object-contain"
+                  className="w-12 h-12 sm:w-16 sm:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5"
                 />
               ) : (
-                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-base sm:text-xl font-black text-purple-300">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-strong)] flex items-center justify-center font-display-ar text-base font-extrabold text-[var(--text-primary)]">
                   {match.teamA.name.slice(0, 2)}
                 </div>
               )}
-              <span className="text-xs sm:text-base font-extrabold text-white truncate max-w-full">
+              <span
+                className="font-display-ar text-sm sm:text-base font-extrabold text-[var(--text-primary)] truncate max-w-full"
+                title={match.teamA.name}
+              >
                 {match.teamA.name}
               </span>
+              <span className="text-[10px] text-[var(--text-muted)]">صاحب الأرض</span>
             </div>
 
-            {/* Center Score / Time */}
-            <div className="flex flex-col items-center gap-1.5 shrink-0 px-4 py-2.5 rounded-2xl bg-black/50 border border-white/10">
+            {/* Center Score / Kickoff (3 cols) */}
+            <div className="col-span-3 flex flex-col items-center justify-center py-3 px-2 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-hairline)] shadow-inner">
               {hasScore ? (
-                <div className="text-2xl sm:text-3xl font-mono-num font-black text-emerald-400 tracking-wider">
+                <div className="font-display-num text-3xl sm:text-5xl font-black text-[var(--accent-primary)] leading-none tracking-tight">
                   {match.scoreA} : {match.scoreB}
                 </div>
               ) : (
-                <div className="text-base sm:text-xl font-mono-num font-extrabold text-white">
+                <div className="font-display-num text-2xl sm:text-4xl font-black text-[var(--text-primary)] leading-none">
                   {match.time}
                 </div>
               )}
 
-              {isLive ? (
-                <span className="px-2.5 py-0.5 rounded-md bg-rose-600 text-white text-[10px] font-mono-num font-extrabold">
-                  مباشر · {match.minute || 'الآن'}
-                </span>
-              ) : match.status === 'RESULT' ? (
-                <span className="text-[11px] text-stone-400 font-bold">انتهت المباراة</span>
-              ) : (
-                <span className="text-[11px] text-stone-400 flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-purple-400" />
-                  <span>لم تبدأ بعد</span>
-                </span>
-              )}
+              <div className="mt-2">
+                {isLive ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--signal-live)] text-white font-display-num text-xs font-black shadow-sm">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                    <span>{formatBroadcastMinute(match.minute)}</span>
+                  </span>
+                ) : match.status === 'RESULT' ? (
+                  <span className="px-2 py-0.5 rounded-md bg-[var(--bg-canvas)] border border-[var(--border-hairline)] font-display-num text-[11px] font-bold text-[var(--text-muted)] uppercase">
+                    FULL TIME · انتهت
+                  </span>
+                ) : (
+                  <span className="font-display-num text-xs font-bold text-[var(--accent-primary)]">
+                    {countdown || 'لم تنطلق بعد'}
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* Team B */}
-            <div className="flex-1 flex flex-col items-center text-center gap-2 min-w-0">
+            {/* Team B (4 cols) */}
+            <div className="col-span-4 flex flex-col items-center text-center gap-2 min-w-0">
               {match.teamB.logo ? (
                 <img
                   src={match.teamB.logo}
                   alt={match.teamB.name}
-                  className="w-12 h-12 sm:w-16 sm:h-16 object-contain"
+                  className="w-12 h-12 sm:w-16 sm:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5"
                 />
               ) : (
-                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-base sm:text-xl font-black text-purple-300">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-strong)] flex items-center justify-center font-display-ar text-base font-extrabold text-[var(--text-primary)]">
                   {match.teamB.name.slice(0, 2)}
                 </div>
               )}
-              <span className="text-xs sm:text-base font-extrabold text-white truncate max-w-full">
+              <span
+                className="font-display-ar text-xs sm:text-base font-extrabold text-[var(--text-primary)] truncate max-w-full"
+                title={match.teamB.name}
+              >
                 {match.teamB.name}
               </span>
+              <span className="text-[10px] text-[var(--text-muted)]">الفريق الضيف</span>
             </div>
           </div>
 
-          {/* Direct Watch CTA if playable */}
+          {/* Direct Broadcast Channels Strip */}
           {match.channels && match.channels.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center justify-center gap-2">
+            <div className="px-4 py-2.5 bg-[var(--bg-surface)] border-t border-[var(--border-hairline)] flex flex-wrap items-center justify-center gap-2">
               {match.channels.slice(0, 3).map((ch, idx) => (
                 <button
                   key={ch.channel_id}
@@ -189,125 +204,142 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
                     onClose();
                     onTuneIn(ch.channel_id, ch.channel_name);
                   }}
-                  className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer ${
+                  className={`px-4 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer shadow-sm ${
                     idx === 0
-                      ? 'bg-emerald-500 hover:bg-emerald-400 text-stone-950 shadow-md'
-                      : 'bg-white/10 hover:bg-white/15 text-white border border-white/15'
+                      ? 'bg-[var(--accent-primary)] text-[var(--accent-contrast)] hover:brightness-110'
+                      : 'bg-[var(--bg-canvas)] hover:bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-hairline)]'
                   }`}
                 >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>مشاهدة على {ch.channel_name}</span>
+                  <Play className="w-3 h-3 fill-current" />
+                  <span>بث مباشر · {ch.channel_name}</span>
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="grid grid-cols-3 border-b border-stone-800 bg-[#0c0e14] text-xs font-extrabold">
+        {/* 2. REFINED 2-TAB BAR (EVENTS & STATS ONLY) */}
+        <div className="grid grid-cols-2 border-b border-[var(--border-hairline)] bg-[var(--bg-surface)] text-xs font-extrabold">
           <button
             type="button"
             onClick={() => setActiveTab('events')}
-            className={`py-3.5 flex items-center justify-center gap-2 border-b-2 transition cursor-pointer ${
+            className={`py-3.5 flex items-center justify-center gap-2 border-l border-[var(--border-hairline)] border-b-[3px] transition-all cursor-pointer ${
               activeTab === 'events'
-                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5'
-                : 'border-transparent text-stone-400 hover:text-stone-200'
+                ? 'border-b-[var(--accent-primary)] text-[var(--accent-primary)] bg-[var(--bg-elevated)] font-black'
+                : 'border-b-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]/50'
             }`}
           >
             <Activity className="w-4 h-4" />
-            <span>أحداث المباراة</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('lineups')}
-            className={`py-3.5 flex items-center justify-center gap-2 border-b-2 transition cursor-pointer ${
-              activeTab === 'lineups'
-                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5'
-                : 'border-transparent text-stone-400 hover:text-stone-200'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>التشكيلة ({details.lineupA.formation})</span>
+            <span className="font-display-ar text-sm">أحداث المباراة المباشرة</span>
+            {details.events.length > 0 && (
+              <span className="font-display-num text-xs px-2 py-0.5 rounded-full bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30 font-bold">
+                {details.events.length}
+              </span>
+            )}
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('stats')}
-            className={`py-3.5 flex items-center justify-center gap-2 border-b-2 transition cursor-pointer ${
+            className={`py-3.5 flex items-center justify-center gap-2 border-b-[3px] transition-all cursor-pointer ${
               activeTab === 'stats'
-                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5'
-                : 'border-transparent text-stone-400 hover:text-stone-200'
+                ? 'border-b-[var(--accent-primary)] text-[var(--accent-primary)] bg-[var(--bg-elevated)] font-black'
+                : 'border-b-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]/50'
             }`}
           >
             <BarChart3 className="w-4 h-4" />
-            <span>الإحصائيات والمواجهات</span>
+            <span className="font-display-ar text-sm">إحصائيات المباراة والمواجهات</span>
           </button>
         </div>
 
-        {/* Tab Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1 text-xs">
+        {/* 3. TAB BODY */}
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-5 flex-1 text-xs bg-[var(--bg-canvas)]">
           {loading && (
-            <div className="text-center text-stone-500 text-[11px]">
-              جاري تحديث بيانات المباراة...
+            <div className="text-center text-[var(--accent-primary)] text-xs font-bold py-1 flex items-center justify-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[var(--accent-primary)] animate-ping" />
+              <span>جاري تحديث أحداث وإحصائيات المباراة لحظياً...</span>
             </div>
           )}
 
-          {/* TAB 1: MATCH EVENTS */}
+          {/* TAB 1: MATCH EVENTS LOG */}
           {activeTab === 'events' && (
             <div className="space-y-3">
               {details.events.length === 0 ? (
-                <div className="py-10 text-center rounded-2xl border border-dashed border-stone-800 p-6 space-y-2">
-                  <Clock className="w-7 h-7 text-stone-500 mx-auto" />
-                  <div className="text-sm font-bold text-stone-200">
-                    لم تنطلق أحداث المباراة بعد
+                <div className="py-14 text-center border border-[var(--border-hairline)] bg-[var(--bg-surface)] rounded-2xl p-6 space-y-2.5 shadow-sm">
+                  <div className="font-display-num text-xl font-extrabold text-[var(--text-muted)]">
+                    NO MATCH EVENTS RECORDED YET
                   </div>
-                  <p className="text-xs text-stone-400">
-                    ستظهر الأهداف والبطاقات والتبديلات لحظة بلحظة فور انطلاق صافرة البداية ({match.time}).
+                  <div className="text-sm font-bold text-[var(--text-primary)]">
+                    لم تُسجل أحداث في هذه المواجهة حتى الآن
+                  </div>
+                  <p className="text-xs text-[var(--text-secondary)] max-w-md mx-auto">
+                    يتم رصد وتسجيل الأهداف، البطاقات الملونة، ركلات الجزاء، والتبديلات تلقائياً لحظة وقوعها أثناء سير المباراة.
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2.5">
+                <div className="border border-[var(--border-hairline)] rounded-2xl divide-y divide-[var(--border-hairline)] bg-[var(--bg-surface)] overflow-hidden shadow-sm">
                   {details.events.map(ev => {
                     const isTeamA = ev.team === 'A';
-                    const badgeLabel =
-                      ev.type === 'goal'
-                        ? '⚽ هدف'
-                        : ev.type === 'penalty_goal'
-                        ? '⚽ هدف (ركلة جزاء)'
-                        : ev.type === 'yellow_card'
-                        ? '🟨 بطاقة صفراء'
-                        : ev.type === 'red_card'
-                        ? '🟥 بطاقة حمراء'
-                        : '🔄 تبديل';
 
                     return (
                       <div
                         key={ev.id}
-                        className={`p-3 rounded-2xl border border-stone-800/90 bg-[#0b0d12] flex items-center justify-between gap-3 ${
-                          isTeamA ? 'border-r-4 border-r-emerald-500' : 'border-l-4 border-l-purple-500'
+                        className={`px-4 py-3 flex items-center justify-between gap-3 transition-colors hover:bg-[var(--bg-row-hover)] border-r-2 ${
+                          isTeamA
+                            ? 'border-r-[var(--accent-primary)]'
+                            : 'border-r-[#3b82f6]'
                         }`}
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="px-2.5 py-1 rounded-lg bg-stone-900 border border-stone-800 font-mono-num font-extrabold text-emerald-400 shrink-0">
-                            {ev.minute}
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          {/* Minute Badge */}
+                          <span className="w-12 py-1 text-center bg-[var(--bg-canvas)] border border-[var(--border-hairline)] rounded-lg font-display-num text-xs sm:text-sm font-extrabold text-[var(--accent-primary)] shrink-0 shadow-inner">
+                            {formatBroadcastMinute(ev.minute)}
                           </span>
-                          <div className="min-w-0">
-                            <div className="font-extrabold text-stone-100 flex items-center gap-2 flex-wrap">
-                              <span>{ev.player}</span>
-                              <span className="text-[10px] px-2 py-0.5 rounded bg-stone-900 text-stone-300 border border-stone-800">
-                                {badgeLabel}
+
+                          {/* Event Type Badge & Description */}
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            {ev.type === 'goal' || ev.type === 'penalty_goal' ? (
+                              <span className="px-2.5 py-1 rounded-md bg-[var(--accent-primary)] text-[var(--accent-contrast)] font-display-ar text-xs font-black shrink-0 shadow-sm">
+                                {ev.type === 'penalty_goal' ? 'هدف (ركلة جزاء)' : 'هدف'}
                               </span>
-                            </div>
-                            {(ev.assistOrSubOut || ev.detail) && (
-                              <div className="text-[11px] text-stone-400 mt-0.5">
-                                {ev.assistOrSubOut || ev.detail}
-                              </div>
+                            ) : ev.type === 'yellow_card' ? (
+                              <span className="px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-400 border border-amber-400/30 text-[11px] font-bold flex items-center gap-1.5 shrink-0">
+                                <span className="w-2.5 h-3.5 bg-amber-400 rounded-[1px] inline-block shadow-sm" />
+                                <span>بطاقة صفراء</span>
+                              </span>
+                            ) : ev.type === 'red_card' ? (
+                              <span className="px-2 py-0.5 rounded-md bg-[var(--signal-live)]/20 text-[var(--signal-live)] border border-[var(--signal-live)]/30 text-[11px] font-bold flex items-center gap-1.5 shrink-0">
+                                <span className="w-2.5 h-3.5 bg-[var(--signal-live)] rounded-[1px] inline-block shadow-sm" />
+                                <span>بطاقة حمراء</span>
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-md bg-[var(--bg-canvas)] border border-[var(--border-hairline)] text-[11px] font-bold text-[var(--text-secondary)] flex items-center gap-1.5 shrink-0">
+                                <ArrowRightLeft className="w-3 h-3 text-[var(--accent-primary)]" />
+                                <span>تبديل</span>
+                              </span>
                             )}
+
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-[var(--text-primary)] text-xs sm:text-sm truncate">
+                                {ev.player}
+                              </div>
+                              {(ev.assistOrSubOut || ev.detail) && (
+                                <div className="text-[11px] text-[var(--text-muted)] truncate mt-0.5">
+                                  {ev.assistOrSubOut || ev.detail}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
 
-                        <span className="text-[11px] font-bold text-stone-400 shrink-0">
+                        {/* Team Attribution */}
+                        <span
+                          className={`text-xs font-extrabold shrink-0 px-2.5 py-1 rounded-lg border ${
+                            isTeamA
+                              ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border-[var(--accent-primary)]/20'
+                              : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                          }`}
+                        >
                           {isTeamA ? match.teamA.name : match.teamB.name}
                         </span>
                       </div>
@@ -318,168 +350,102 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: STARTING LINEUPS & SUBSTITUTES */}
-          {activeTab === 'lineups' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { teamName: match.teamA.name, lineup: details.lineupA, accent: 'text-emerald-400' },
-                { teamName: match.teamB.name, lineup: details.lineupB, accent: 'text-purple-400' }
-              ].map((side, sIdx) => (
-                <div
-                  key={sIdx}
-                  className="rounded-2xl border border-stone-800 bg-[#0b0d12] p-4 space-y-4"
-                >
-                  <div className="flex items-center justify-between border-b border-stone-800 pb-2.5">
-                    <div>
-                      <div className="text-sm font-black text-white">{side.teamName}</div>
-                      {side.lineup.coach && (
-                        <div className="text-[11px] text-stone-400">
-                          المدرب: {side.lineup.coach}
-                        </div>
-                      )}
-                    </div>
-                    <span className="px-2.5 py-1 rounded-lg bg-stone-900 border border-stone-800 font-mono-num font-extrabold text-emerald-400">
-                      {side.lineup.formation || '4-3-3'}
-                    </span>
-                  </div>
-
-                  {side.lineup.startingXI.length === 0 ? (
-                    <div className="py-8 text-center text-stone-400 text-xs">
-                      {loading
-                        ? 'جاري جلب التشكيلة الرسمية وأسماء اللاعبين...'
-                        : 'لم يتم الإعلان عن التشكيلة الرسمية لهذه المباراة بعد'}
-                    </div>
-                  ) : (
-                    <>
-                      <div className="space-y-1.5">
-                        <div className="text-[11px] font-extrabold text-emerald-400 mb-1 flex items-center justify-between">
-                          <span>التشكيل الأساسي ({side.lineup.startingXI.length})</span>
-                          <span className="text-[10px] text-stone-500 font-normal">المركز</span>
-                        </div>
-                        {side.lineup.startingXI.map((p, pIdx) => (
-                          <div
-                            key={`${p.number}_${pIdx}`}
-                            className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-[#101218] border border-stone-800/70"
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <span className="w-6 h-6 rounded-lg bg-stone-900 border border-stone-800 font-mono-num text-[11px] font-extrabold text-stone-300 flex items-center justify-center shrink-0">
-                                {p.number || pIdx + 1}
-                              </span>
-                              <span className="font-bold text-stone-100 truncate">
-                                {p.name}
-                              </span>
-                              {p.isCaptain && (
-                                <span className="px-1.5 py-0.2 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[9px] font-extrabold">
-                                  C
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-[10px] font-mono text-stone-400 px-1.5 py-0.5 rounded bg-stone-900/90 border border-stone-800">
-                                {p.position}
-                              </span>
-                              {p.rating && (
-                                <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono-num text-[10px] font-extrabold">
-                                  {p.rating}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {side.lineup.substitutes && side.lineup.substitutes.length > 0 && (
-                        <div className="space-y-1.5 pt-2 border-t border-stone-800/80">
-                          <div className="text-[11px] font-extrabold text-purple-300 mb-1">
-                            مقاعد البدلاء ({side.lineup.substitutes.length})
-                          </div>
-                          <div className="grid grid-cols-1 gap-1.5">
-                            {side.lineup.substitutes.map((sub, subIdx) => (
-                              <div
-                                key={`sub_${sub.number}_${subIdx}`}
-                                className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-[#0d0f15] border border-stone-800/50 text-stone-300"
-                              >
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className="w-5 h-5 rounded bg-stone-900 border border-stone-800 font-mono-num text-[10px] font-bold text-stone-400 flex items-center justify-center shrink-0">
-                                    {sub.number || '-'}
-                                  </span>
-                                  <span className="font-semibold text-stone-200 truncate text-[11px]">
-                                    {sub.name}
-                                  </span>
-                                </div>
-                                <span className="text-[9px] font-mono text-stone-500">
-                                  {sub.position}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* TAB 3: STATS & HEAD-TO-HEAD */}
+          {/* TAB 2: STATS & HEAD-TO-HEAD */}
           {activeTab === 'stats' && (
-            <div className="space-y-6">
-              {/* Team Comparison Bars */}
-              <div className="rounded-2xl border border-stone-800 bg-[#0b0d12] p-4 space-y-4">
-                <div className="flex items-center justify-between text-xs font-extrabold text-stone-200 border-b border-stone-800 pb-2.5">
-                  <span className="text-emerald-400">{match.teamA.name}</span>
-                  <span>إحصائيات الفريقين</span>
-                  <span className="text-purple-400">{match.teamB.name}</span>
+            <div className="space-y-5">
+              {/* Team Comparison Header & Bars */}
+              <div className="border border-[var(--border-hairline)] bg-[var(--bg-surface)] rounded-2xl p-4 sm:p-5 space-y-4 shadow-sm">
+                <div className="flex items-center justify-between text-xs font-black border-b border-[var(--border-hairline)] pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[var(--accent-primary)]" />
+                    <span className="text-[var(--accent-primary)] text-sm">{match.teamA.name}</span>
+                  </div>
+                  <span className="font-display-ar text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                    مقارنة إحصائيات اللعب
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-blue-400 text-sm">{match.teamB.name}</span>
+                    <span className="w-2 h-2 rounded-full bg-blue-400" />
+                  </div>
                 </div>
 
-                {details.stats.map((st, idx) => (
-                  <div key={idx} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <span className="font-mono-num text-emerald-400">{st.valueA}</span>
-                      <span className="text-stone-300">{st.label}</span>
-                      <span className="font-mono-num text-purple-400">{st.valueB}</span>
+                {details.stats.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-[var(--text-muted)] space-y-1">
+                    <div className="font-bold text-[var(--text-secondary)]">
+                      الإحصائيات المباشرة تصدر مع انطلاق الشوط الأول للمباراة
                     </div>
-                    <div className="h-2 rounded-full bg-stone-900 overflow-hidden flex">
-                      <div
-                        className="bg-emerald-500 transition-all"
-                        style={{ width: `${st.percentA}%` }}
-                      />
-                      <div
-                        className="bg-purple-500 transition-all"
-                        style={{ width: `${st.percentB}%` }}
-                      />
-                    </div>
+                    <div>تابع أدناه السجل التاريخي للمواجهات المباشرة بين الفريقين.</div>
                   </div>
-                ))}
+                ) : (
+                  <div className="space-y-3.5 pt-1">
+                    {details.stats.map((st, idx) => (
+                      <div key={idx} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs font-bold">
+                          <span className="font-display-num text-sm sm:text-base font-black text-[var(--accent-primary)]">
+                            {st.valueA}
+                          </span>
+                          <span className="text-[var(--text-secondary)] font-medium text-xs">
+                            {st.label}
+                          </span>
+                          <span className="font-display-num text-sm sm:text-base font-black text-blue-400">
+                            {st.valueB}
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-hairline)] overflow-hidden flex">
+                          <div
+                            className="bg-[var(--accent-primary)] transition-all rounded-r-full"
+                            style={{ width: `${st.percentA}%` }}
+                          />
+                          <div
+                            className="bg-blue-400 transition-all rounded-l-full"
+                            style={{ width: `${st.percentB}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Head-to-Head History */}
-              <div className="rounded-2xl border border-stone-800 bg-[#0b0d12] p-4 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-extrabold text-white">
-                  <ArrowLeftRight className="w-4 h-4 text-emerald-400" />
-                  <span>آخر المواجهات المباشرة</span>
+              <div className="border border-[var(--border-hairline)] bg-[var(--bg-surface)] rounded-2xl overflow-hidden shadow-sm">
+                <div className="px-5 py-3 bg-[var(--bg-elevated)] border-b border-[var(--border-hairline)] flex items-center justify-between">
+                  <h3 className="font-display-ar text-xs sm:text-sm font-extrabold text-[var(--text-primary)]">
+                    سجل المواجهات المباشرة الأخيرة (H2H)
+                  </h3>
+                  <span className="text-[11px] text-[var(--text-muted)] font-display-num">
+                    HEAD TO HEAD
+                  </span>
                 </div>
-                <div className="space-y-2">
-                  {details.h2h.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="p-2.5 rounded-xl bg-[#101218] border border-stone-800 flex items-center justify-between gap-2"
-                    >
-                      <span className="text-[11px] text-stone-400 shrink-0">{item.date}</span>
-                      <div className="flex items-center gap-3 font-bold text-stone-200">
-                        <span>{item.teamA}</span>
-                        <span className="px-2 py-0.5 rounded bg-stone-900 border border-stone-800 font-mono-num text-emerald-400">
-                          {item.scoreA} - {item.scoreB}
+
+                {details.h2h.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-[var(--text-muted)]">
+                    لا توجد مواجهات مباشرة مسجلة مؤخراً بين الفريقين في قاعدة البيانات.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-[var(--border-hairline)]">
+                    {details.h2h.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="px-5 py-3 flex items-center justify-between gap-3 hover:bg-[var(--bg-row-hover)] transition-colors"
+                      >
+                        <span className="font-display-num text-xs text-[var(--text-muted)] shrink-0">
+                          {item.date}
                         </span>
-                        <span>{item.teamB}</span>
+                        <div className="flex items-center gap-3 font-bold text-xs sm:text-sm text-[var(--text-primary)]">
+                          <span className="truncate max-w-[120px] sm:max-w-[180px]">{item.teamA}</span>
+                          <span className="px-2.5 py-0.5 rounded-lg bg-[var(--bg-canvas)] border border-[var(--border-hairline)] font-display-num text-xs sm:text-sm font-black text-[var(--accent-primary)] shadow-inner">
+                            {item.scoreA} - {item.scoreB}
+                          </span>
+                          <span className="truncate max-w-[120px] sm:max-w-[180px]">{item.teamB}</span>
+                        </div>
+                        <span className="text-[11px] text-[var(--text-muted)] truncate hidden sm:inline">
+                          {item.competition}
+                        </span>
                       </div>
-                      <span className="text-[10px] text-stone-500 truncate hidden sm:inline">
-                        {item.competition}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
