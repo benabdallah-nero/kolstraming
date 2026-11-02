@@ -87,7 +87,11 @@ export const Navbar: React.FC = () => {
               onClick={() => navigate('/home')}
               className="flex items-center gap-2.5 pl-5 border-l border-[var(--border-hairline)] cursor-pointer group text-right"
             >
-              <span className="w-1.5 h-6 bg-[var(--accent-primary)] shrink-0" />
+              <img
+                src="/favicon.svg"
+                alt="UEFA Champions League Starball"
+                className="w-7 h-7 object-contain shrink-0 group-hover:rotate-12 transition-transform duration-300 drop-shadow-[0_0_10px_rgba(37,99,235,0.45)]"
+              />
               <div className="flex flex-col leading-none">
                 <span className="font-display-num text-2xl font-extrabold tracking-wider uppercase text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors">
                   KOLSTREAM

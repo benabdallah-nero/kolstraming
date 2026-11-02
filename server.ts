@@ -12,6 +12,12 @@ const isProduction = process.env.NODE_ENV === 'production';
 // Mount Vite or serve static files
 async function startServer() {
   // Explicit SEO and Service Worker routes before Vite SPA fallback
+  app.get('/favicon.svg', (_req, res) => {
+    res.type('image/svg+xml').sendFile(path.resolve(__dirname, 'public', 'favicon.svg'));
+  });
+  app.get('/ucl-starball.svg', (_req, res) => {
+    res.type('image/svg+xml').sendFile(path.resolve(__dirname, 'public', 'ucl-starball.svg'));
+  });
   app.get('/sw.js', (_req, res) => {
     res.setHeader('Service-Worker-Allowed', '/');
     res.type('application/javascript').sendFile(path.resolve(__dirname, 'public', 'sw.js'));
