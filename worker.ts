@@ -61,6 +61,73 @@ function jsonResponse(data: any, status = 200, cacheSec = 60): Response {
   });
 }
 
+const DEFAULT_SECRET = 'kolstream_secure_hmac_secret_2026_9b8a7c6d';
+
+async function signStreamTokenEdge(
+  channelId: string | number,
+  exp: number,
+  secret: string = DEFAULT_SECRET
+): Promise<string> {
+  const enc = new TextEncoder();
+  const data = `stream:${channelId}:${exp}`;
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(data));
+  const hashArr = Array.from(new Uint8Array(sig));
+  return hashArr.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+}
+
+async function verifyStreamTokenEdge(
+  channelId: string | number,
+  expStr: string | number | null,
+  token: string | null,
+  secret: string = DEFAULT_SECRET
+): Promise<boolean> {
+  if (!token || !expStr) return false;
+  const exp = typeof expStr === 'number' ? expStr : parseInt(expStr, 10);
+  if (isNaN(exp)) return false;
+  const now = Math.floor(Date.now() / 1000);
+  if (exp < now - 300) return false;
+  if (exp > now + 86400) return false;
+
+  const expected = await signStreamTokenEdge(channelId, exp, secret);
+  if (token === expected) return true;
+  const universal = await signStreamTokenEdge('*', exp, secret);
+  return token === universal;
+}
+
+function isOriginAllowedEdge(originOrReferer: string | null | undefined, requestHost?: string | null): boolean {
+  if (!originOrReferer) return true;
+  try {
+    const parsed = new URL(originOrReferer);
+    const hostname = parsed.hostname.toLowerCase();
+    if (requestHost) {
+      const cleanHost = requestHost.split(':')[0].toLowerCase();
+      if (hostname === cleanHost) return true;
+    }
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.endsWith('.workers.dev') ||
+      hostname.endsWith('.pages.dev') ||
+      hostname.endsWith('.run.app') ||
+      hostname.endsWith('.vercel.app') ||
+      hostname.endsWith('.kolnovel.com') ||
+      hostname.endsWith('.kolstreaming.com')
+    ) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 // Core 24/7 base channels (verified IDs from DaddyLive catalog)
 const CURATED_SPECIAL_CHANNELS = [
   { id: 91, name: 'beIN Sports 1 Arabic', arabicName: 'بي إن سبورت 1 HD', category: 'ar', subcat: 'bein_ar', quality: '1080p FHD', lang: 'Arabic', logo: 'bein1.png', country: 'QA' },
@@ -859,7 +926,11 @@ async function getCastServerM3u8(channelId: string | number): Promise<{ m3u8Url:
   return null;
 }
 
-async function fetchDembedRewrittenPlaylist(id: string | number): Promise<string | null> {
+async function fetchDembedRewrittenPlaylist(
+  id: string | number,
+  token?: string | null,
+  exp?: string | number | null
+): Promise<string | null> {
   try {
     const dembedM3u8Url = await getDembedAuthedM3u8Url(id);
     if (!dembedM3u8Url) return null;
@@ -872,13 +943,18 @@ async function fetchDembedRewrittenPlaylist(id: string | number): Promise<string
     if (!playlistText.includes('#EXTM3U')) return null;
 
     const baseUrl = dembedM3u8Url.substring(0, dembedM3u8Url.lastIndexOf('/') + 1);
+    const authSuffix =
+      token && exp
+        ? `&id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}&exp=${encodeURIComponent(exp)}`
+        : '';
+
     return playlistText
       .split('\n')
       .map(line => {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith('#')) return line;
         const abs = trimmed.startsWith('http') ? trimmed : new URL(trimmed, baseUrl).href;
-        return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=dembed`;
+        return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=dembed${authSuffix}`;
       })
       .join('\n');
   } catch {
@@ -886,7 +962,11 @@ async function fetchDembedRewrittenPlaylist(id: string | number): Promise<string
   }
 }
 
-async function fetchCastRewrittenPlaylist(id: string | number): Promise<string | null> {
+async function fetchCastRewrittenPlaylist(
+  id: string | number,
+  token?: string | null,
+  exp?: string | number | null
+): Promise<string | null> {
   try {
     const castInfo = await getCastServerM3u8(id);
     if (!castInfo) return null;
@@ -899,13 +979,18 @@ async function fetchCastRewrittenPlaylist(id: string | number): Promise<string |
     if (!playlistText.includes('#EXTM3U')) return null;
 
     const baseUrl = castInfo.m3u8Url.substring(0, castInfo.m3u8Url.lastIndexOf('/') + 1);
+    const authSuffix =
+      token && exp
+        ? `&id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}&exp=${encodeURIComponent(exp)}`
+        : '';
+
     return playlistText
       .split('\n')
       .map(line => {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith('#')) return line;
         const abs = trimmed.startsWith('http') ? trimmed : new URL(trimmed, baseUrl).href;
-        return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=cast&origin=${encodeURIComponent(castInfo.origin)}`;
+        return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=cast&origin=${encodeURIComponent(castInfo.origin)}${authSuffix}`;
       })
       .join('\n');
   } catch {
@@ -913,7 +998,11 @@ async function fetchCastRewrittenPlaylist(id: string | number): Promise<string |
   }
 }
 
-async function fetchWideRewrittenPlaylist(id: string | number): Promise<string | null> {
+async function fetchWideRewrittenPlaylist(
+  id: string | number,
+  token?: string | null,
+  exp?: string | number | null
+): Promise<string | null> {
   try {
     const slug = await getChannelStreamSlug(id);
     if (!slug) return null;
@@ -933,13 +1022,18 @@ async function fetchWideRewrittenPlaylist(id: string | number): Promise<string |
     if (playlistText.includes('tracks-v1/mono.m3u8')) return null;
 
     const baseUrl = directUrl.substring(0, directUrl.lastIndexOf('/') + 1);
+    const authSuffix =
+      token && exp
+        ? `&id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}&exp=${encodeURIComponent(exp)}`
+        : '';
+
     return playlistText
       .split('\n')
       .map(line => {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith('#')) return line;
         const abs = trimmed.startsWith('http') ? trimmed : new URL(trimmed, baseUrl).href;
-        return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=wide`;
+        return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=wide${authSuffix}`;
       })
       .join('\n');
   } catch {
@@ -1551,13 +1645,38 @@ export default {
         return jsonResponse({ success: true, epg: epgMap }, 200, 30);
       }
 
+      // /api/stream-auth/:id
+      const authMatch = pathname.match(/^\/api\/stream-auth\/([^/]+)$/);
+      if (authMatch) {
+        const id = authMatch[1];
+        const origin = request.headers.get('origin');
+        const referer = request.headers.get('referer');
+        if ((origin && !isOriginAllowedEdge(origin, url.host)) || (referer && !isOriginAllowedEdge(referer, url.host))) {
+          return jsonResponse({ success: false, error: 'Access denied: unauthorized origin' }, 403);
+        }
+
+        const exp = Math.floor(Date.now() / 1000) + 7200;
+        const secret = env.STREAM_AUTH_SECRET || DEFAULT_SECRET;
+        const token = await signStreamTokenEdge(id, exp, secret);
+        return jsonResponse({
+          success: true,
+          channelId: id,
+          token,
+          exp,
+          streamUrl: `/api/proxy-stream/${id}/live.m3u8?token=${token}&exp=${exp}`
+        });
+      }
+
       // /api/resolve-m3u8/:id
       const resolveMatch = pathname.match(/^\/api\/resolve-m3u8\/([^/]+)$/);
       if (resolveMatch) {
         const id = resolveMatch[1];
         const slug = await getChannelStreamSlug(id);
         const found = CURATED_SPECIAL_CHANNELS.find(c => String(c.id) === String(id));
-        const proxyStreamUrl = `/api/proxy-stream/${id}/live.m3u8`;
+        const exp = Math.floor(Date.now() / 1000) + 7200;
+        const secret = env.STREAM_AUTH_SECRET || DEFAULT_SECRET;
+        const token = await signStreamTokenEdge(id, exp, secret);
+        const proxyStreamUrl = `/api/proxy-stream/${id}/live.m3u8?token=${token}&exp=${exp}`;
         return jsonResponse({
           success: true,
           channelId: id,
@@ -1565,6 +1684,8 @@ export default {
           lang: found?.lang || 'International',
           category: found?.category || 'other',
           slug: slug || `premium${id}`,
+          token,
+          exp,
           streamUrl: proxyStreamUrl,
           servers: [
             {
@@ -1586,6 +1707,33 @@ export default {
       if (streamMatch) {
         const id = streamMatch[1];
         const preferredSource = url.searchParams.get('source') || 'dembed';
+        const token = url.searchParams.get('token');
+        const exp = url.searchParams.get('exp');
+
+        // 1. Anti-Hotlinking Origin Verification
+        const origin = request.headers.get('origin');
+        const referer = request.headers.get('referer');
+        if ((origin && !isOriginAllowedEdge(origin, url.host)) || (referer && !isOriginAllowedEdge(referer, url.host))) {
+          return new Response('#EXTM3U\n#EXT-X-ERROR: 403 Forbidden - Hotlinking not allowed\n', {
+            status: 403,
+            headers: { 'Content-Type': 'application/vnd.apple.mpegurl' }
+          });
+        }
+
+        // 2. Cryptographic Token Verification
+        const secret = env.STREAM_AUTH_SECRET || DEFAULT_SECRET;
+        const isValid = await verifyStreamTokenEdge(id, exp, token, secret);
+        if (!isValid) {
+          return new Response('#EXTM3U\n#EXT-X-ERROR: 403 Forbidden - Stream signature missing or expired. Unauthorized fetch blocked.\n', {
+            status: 403,
+            headers: {
+              ...CORS_HEADERS,
+              'Content-Type': 'application/vnd.apple.mpegurl',
+              'Cache-Control': 'no-cache, no-store, must-revalidate'
+            }
+          });
+        }
+
         const order: Array<'dembed' | 'cast' | 'wide'> =
           preferredSource === 'cast'
             ? ['cast', 'dembed', 'wide']
@@ -1595,9 +1743,9 @@ export default {
 
         for (const provider of order) {
           let playlist: string | null = null;
-          if (provider === 'dembed') playlist = await fetchDembedRewrittenPlaylist(id);
-          else if (provider === 'cast') playlist = await fetchCastRewrittenPlaylist(id);
-          else if (provider === 'wide') playlist = await fetchWideRewrittenPlaylist(id);
+          if (provider === 'dembed') playlist = await fetchDembedRewrittenPlaylist(id, token, exp);
+          else if (provider === 'cast') playlist = await fetchCastRewrittenPlaylist(id, token, exp);
+          else if (provider === 'wide') playlist = await fetchWideRewrittenPlaylist(id, token, exp);
 
           if (playlist) {
             return new Response(playlist, {
@@ -1623,7 +1771,21 @@ export default {
         const chunkUrl = url.searchParams.get('url');
         const mode = url.searchParams.get('mode') || 'dembed';
         const customOrigin = url.searchParams.get('origin') || 'https://tossequip.net';
+        const chunkId = url.searchParams.get('id') || '*';
+        const token = url.searchParams.get('token');
+        const exp = url.searchParams.get('exp');
+
         if (!chunkUrl) return new Response('Missing url', { status: 400, headers: CORS_HEADERS });
+
+        // Verify chunk token
+        const secret = env.STREAM_AUTH_SECRET || DEFAULT_SECRET;
+        const isValid = await verifyStreamTokenEdge(chunkId, exp, token, secret);
+        if (!isValid) {
+          return new Response('403 Forbidden: Invalid or expired chunk signature', {
+            status: 403,
+            headers: CORS_HEADERS
+          });
+        }
 
         try {
           const headers: Record<string, string> = { 'User-Agent': UA };
@@ -1647,13 +1809,17 @@ export default {
             const text = await upstreamRes.text();
             if (text.includes('#EXTM3U')) {
               const baseUrl = chunkUrl.substring(0, chunkUrl.lastIndexOf('/') + 1);
+              const authSuffix =
+                token && exp
+                  ? `&id=${encodeURIComponent(chunkId)}&token=${encodeURIComponent(token)}&exp=${encodeURIComponent(exp)}`
+                  : '';
               const rewritten = text
                 .split('\n')
                 .map(line => {
                   const trimmed = line.trim();
                   if (!trimmed || trimmed.startsWith('#')) return line;
                   const abs = trimmed.startsWith('http') ? trimmed : new URL(trimmed, baseUrl).href;
-                  return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=${mode}&origin=${encodeURIComponent(customOrigin)}`;
+                  return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=${mode}&origin=${encodeURIComponent(customOrigin)}${authSuffix}`;
                 })
                 .join('\n');
               return new Response(rewritten, {

@@ -16,6 +16,7 @@ import {
   X
 } from 'lucide-react';
 import { useApp, getApiUrl } from '../context/AppContext';
+import { getAuthorizedStreamUrl } from '../services/streamAuth';
 import { Channel, QualityResolution } from '../types';
 import { usePageSeo } from '../hooks/usePageSeo';
 import { getChannelBrandIdentity } from '../utils/channelBranding';
@@ -85,56 +86,59 @@ const MultiViewCellPlayer: React.FC<{
       hlsRef.current = null;
     }
 
-    const streamUrl = getApiUrl(
-      `/api/proxy-stream/${channel.id}/live.m3u8?source=${sourceMode}`
-    );
+    let cancelled = false;
 
-    if (Hls.isSupported()) {
-      const hls = createCleanHlsInstance();
-      hlsRef.current = hls;
-      hls.loadSource(streamUrl);
-      hls.attachMedia(video);
+    getAuthorizedStreamUrl(channel.id, sourceMode).then(streamUrl => {
+      if (cancelled || !videoRef.current) return;
 
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        video.muted = !isAudioActive;
-        video
-          .play()
-          .then(() => setStatus('playing'))
-          .catch(() => {
-            video.muted = true;
-            video.play().catch(() => {});
-            setStatus('playing');
-          });
-      });
+      if (Hls.isSupported()) {
+        const hls = createCleanHlsInstance();
+        hlsRef.current = hls;
+        hls.loadSource(streamUrl);
+        hls.attachMedia(video);
 
-      let errCount = 0;
-      hls.on(Hls.Events.ERROR, (_ev, data) => {
-        if (!data.fatal) return;
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-          hls.recoverMediaError();
-        } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-          errCount++;
-          if (errCount <= 2) {
-            hls.startLoad();
-          } else if (sourceMode === 'dembed') {
-            setSourceMode('cast');
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          video.muted = !isAudioActive;
+          video
+            .play()
+            .then(() => setStatus('playing'))
+            .catch(() => {
+              video.muted = true;
+              video.play().catch(() => {});
+              setStatus('playing');
+            });
+        });
+
+        let errCount = 0;
+        hls.on(Hls.Events.ERROR, (_ev, data) => {
+          if (!data.fatal) return;
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            hls.recoverMediaError();
+          } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            errCount++;
+            if (errCount <= 2) {
+              hls.startLoad();
+            } else if (sourceMode === 'dembed') {
+              setSourceMode('cast');
+            } else {
+              setStatus('error');
+            }
           } else {
             setStatus('error');
           }
-        } else {
-          setStatus('error');
-        }
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = streamUrl;
-      video.muted = !isAudioActive;
-      video.addEventListener('loadedmetadata', () => {
-        video.play().catch(() => {});
-        setStatus('playing');
-      });
-    }
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = streamUrl;
+        video.muted = !isAudioActive;
+        video.addEventListener('loadedmetadata', () => {
+          video.play().catch(() => {});
+          setStatus('playing');
+        });
+      }
+    });
 
     return () => {
+      cancelled = true;
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
@@ -548,75 +552,78 @@ export const WatchRoomPage: React.FC = () => {
       hlsRef.current = null;
     }
 
+    let cancelled = false;
     const sourceParam =
       playerMode === 'server1' ? 'dembed' : playerMode === 'server2' ? 'cast' : 'wide';
-    const streamUrl = getApiUrl(
-      `/api/proxy-stream/${currentChannel.id}/live.m3u8?source=${sourceParam}&r=${retryKey}`
-    );
 
-    const tryPlayDirect = () => {
-      video.muted = false;
-      video.volume = volume > 0.05 ? volume : 1.0;
-      video
-        .play()
-        .then(() => {
-          setIsMuted(false);
-          setPlayerStatus('playing');
-        })
-        .catch(() => {
-          video.muted = true;
-          setIsMuted(true);
-          video
-            .play()
-            .then(() => setPlayerStatus('playing'))
-            .catch(() => setPlayerStatus('playing'));
+    getAuthorizedStreamUrl(currentChannel.id, sourceParam, retryKey).then(streamUrl => {
+      if (cancelled || !videoRef.current) return;
+
+      const tryPlayDirect = () => {
+        video.muted = false;
+        video.volume = volume > 0.05 ? volume : 1.0;
+        video
+          .play()
+          .then(() => {
+            setIsMuted(false);
+            setPlayerStatus('playing');
+          })
+          .catch(() => {
+            video.muted = true;
+            setIsMuted(true);
+            video
+              .play()
+              .then(() => setPlayerStatus('playing'))
+              .catch(() => setPlayerStatus('playing'));
+          });
+      };
+
+      if (Hls.isSupported()) {
+        const hls = createCleanHlsInstance();
+        hlsRef.current = hls;
+        hls.loadSource(streamUrl);
+        hls.attachMedia(video);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          const lvls = hls.levels || [];
+          setHasMultipleLevels(lvls.length > 1);
+          applyQualityToHls(selectedQuality);
+          tryPlayDirect();
         });
-    };
 
-    if (Hls.isSupported()) {
-      const hls = createCleanHlsInstance();
-      hlsRef.current = hls;
-      hls.loadSource(streamUrl);
-      hls.attachMedia(video);
+        let netErrorCount = 0;
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+          if (!data.fatal) return;
 
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        const lvls = hls.levels || [];
-        setHasMultipleLevels(lvls.length > 1);
-        applyQualityToHls(selectedQuality);
-        tryPlayDirect();
-      });
-
-      let netErrorCount = 0;
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (!data.fatal) return;
-
-        switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
-            netErrorCount++;
-            if (netErrorCount <= 3) {
-              hls.startLoad();
-            } else if (playerMode === 'server1') {
-              setPlayerMode('server2');
-            } else {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              netErrorCount++;
+              if (netErrorCount <= 3) {
+                hls.startLoad();
+              } else if (playerMode === 'server1') {
+                setPlayerMode('server2');
+              } else {
+                setPlayerStatus('error');
+              }
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              hls.recoverMediaError();
+              break;
+            default:
               setPlayerStatus('error');
-            }
-            break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
-            hls.recoverMediaError();
-            break;
-          default:
-            setPlayerStatus('error');
-            hls.destroy();
-            break;
-        }
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = streamUrl;
-      video.addEventListener('loadedmetadata', tryPlayDirect, { once: true });
-      video.addEventListener('error', () => setPlayerStatus('error'), { once: true });
-    }
+              hls.destroy();
+              break;
+          }
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = streamUrl;
+        video.addEventListener('loadedmetadata', tryPlayDirect, { once: true });
+        video.addEventListener('error', () => setPlayerStatus('error'), { once: true });
+      }
+    });
 
     return () => {
+      cancelled = true;
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;

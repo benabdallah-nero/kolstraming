@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Hls from 'hls.js';
 import { Maximize2, X, Volume2, VolumeX, ChevronRight, ChevronLeft, Minimize2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { getAuthorizedStreamUrl } from '../services/streamAuth';
 
 export const MiniPlayerPill: React.FC = () => {
   const { activeStreamingChannel, setActiveStreamingChannel, channels } = useApp();
@@ -33,7 +34,7 @@ export const MiniPlayerPill: React.FC = () => {
       hlsRef.current = null;
     }
 
-    const streamUrl = `/api/proxy-stream/${activeStreamingChannel.id}/live.m3u8?source=dembed`;
+    let cancelled = false;
 
     const startPlayback = () => {
       video.muted = isMuted;
@@ -44,24 +45,29 @@ export const MiniPlayerPill: React.FC = () => {
       });
     };
 
-    if (Hls.isSupported()) {
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: false,
-        maxBufferLength: 25
-      });
-      hlsRef.current = hls;
-      hls.loadSource(streamUrl);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        startPlayback();
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = streamUrl;
-      video.addEventListener('loadedmetadata', startPlayback, { once: true });
-    }
+    getAuthorizedStreamUrl(activeStreamingChannel.id, 'dembed').then(streamUrl => {
+      if (cancelled || !videoRef.current) return;
+
+      if (Hls.isSupported()) {
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: false,
+          maxBufferLength: 25
+        });
+        hlsRef.current = hls;
+        hls.loadSource(streamUrl);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          startPlayback();
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = streamUrl;
+        video.addEventListener('loadedmetadata', startPlayback, { once: true });
+      }
+    });
 
     return () => {
+      cancelled = true;
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;

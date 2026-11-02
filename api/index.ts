@@ -1,5 +1,6 @@
 import express, { type Request, type Response } from 'express';
 import zlib from 'zlib';
+import crypto from 'crypto';
 import {
   LEAGUES_CATALOG,
   YALLAKORA_STANDING_PATHS,
@@ -13,6 +14,78 @@ import {
 const app = express();
 
 app.use(express.json());
+
+// Cryptographic Secret for HLS Live Stream Tokens
+const STREAM_AUTH_SECRET = process.env.STREAM_AUTH_SECRET || 'kolstream_secure_hmac_secret_2026_9b8a7c6d';
+
+export function signStreamToken(channelId: string | number, exp: number): string {
+  const data = `stream:${channelId}:${exp}`;
+  return crypto.createHmac('sha256', STREAM_AUTH_SECRET).update(data).digest('hex').slice(0, 32);
+}
+
+export function verifyStreamToken(channelId: string | number, expStr: any, token: any): boolean {
+  if (!token || !expStr) return false;
+  const exp = typeof expStr === 'number' ? expStr : parseInt(String(expStr), 10);
+  if (isNaN(exp)) return false;
+  const now = Math.floor(Date.now() / 1000);
+  // Valid within reasonable time window (allow 5m clock skew, max 24h into future)
+  if (exp < now - 300) return false;
+  if (exp > now + 86400) return false;
+
+  const expected = signStreamToken(channelId, exp);
+  if (token === expected) return true;
+  const universal = signStreamToken('*', exp);
+  return token === universal;
+}
+
+export function isOriginAllowed(originOrReferer: string | null | undefined, requestHost?: string | null): boolean {
+  if (!originOrReferer) return true;
+  try {
+    const parsed = new URL(originOrReferer);
+    const hostname = parsed.hostname.toLowerCase();
+    if (requestHost) {
+      const cleanHost = requestHost.split(':')[0].toLowerCase();
+      if (hostname === cleanHost) return true;
+    }
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.endsWith('.workers.dev') ||
+      hostname.endsWith('.pages.dev') ||
+      hostname.endsWith('.run.app') ||
+      hostname.endsWith('.vercel.app') ||
+      hostname.endsWith('.kolnovel.com') ||
+      hostname.endsWith('.kolstreaming.com')
+    ) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export function setStreamCorsHeaders(req: Request, res: Response): void {
+  const origin = req.headers.origin as string | undefined;
+  const referer = req.headers.referer as string | undefined;
+  const host = req.headers.host;
+
+  if (origin && isOriginAllowed(origin, host)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  } else if (referer && isOriginAllowed(referer, host)) {
+    try {
+      const originFromReferer = new URL(referer).origin;
+      res.setHeader('Access-Control-Allow-Origin', originFromReferer);
+    } catch {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization, X-Requested-With');
+}
 
 // In-memory cache
 interface CacheEntry<T> {
@@ -2215,6 +2288,31 @@ async function resolveDynamicChannelInfo(id: string | number): Promise<{ name: s
   return { name: `Live Sports Channel #${numId}`, lang: 'International', category: 'other' };
 }
 
+// API: Issue signed stream session token
+app.get('/api/stream-auth/:id', (req: Request, res: Response) => {
+  const id = req.params.id;
+  const origin = req.headers.origin;
+  const referer = req.headers.referer;
+
+  // Origin check
+  if ((origin && !isOriginAllowed(origin, req.headers.host)) || (referer && !isOriginAllowed(referer, req.headers.host))) {
+    return res.status(403).json({ success: false, error: 'Access denied: unauthorized origin' });
+  }
+
+  // Token valid for 2 hours (7200 seconds)
+  const exp = Math.floor(Date.now() / 1000) + 7200;
+  const token = signStreamToken(id, exp);
+
+  setStreamCorsHeaders(req, res);
+  return res.json({
+    success: true,
+    channelId: id,
+    token,
+    exp,
+    streamUrl: `/api/proxy-stream/${id}/live.m3u8?token=${token}&exp=${exp}`
+  });
+});
+
 // API: Stream resolver info & dynamic channel metadata
 app.get('/api/resolve-m3u8/:id', async (req: Request, res: Response) => {
   const id = req.params.id;
@@ -2224,15 +2322,19 @@ app.get('/api/resolve-m3u8/:id', async (req: Request, res: Response) => {
       resolveDynamicChannelInfo(id)
     ]);
 
-    const proxyStreamUrl = `/api/proxy-stream/${id}/live.m3u8`;
+    const exp = Math.floor(Date.now() / 1000) + 7200;
+    const token = signStreamToken(id, exp);
+    const proxyStreamUrl = `/api/proxy-stream/${id}/live.m3u8?token=${token}&exp=${exp}`;
+    const cleanEmbedUrl = `/api/clean-embed/player/${id}?token=${token}&exp=${exp}`;
+
     const servers = [
       {
         id: 'srv-1',
         name: 'سيرفر 1 (المشغل المحمي FHD 1080p)',
         folder: 'player',
         quality: '1080p FHD 60fps',
-        url: `/api/clean-embed/player/${id}`,
-        embedUrl: `/api/clean-embed/player/${id}`,
+        url: cleanEmbedUrl,
+        embedUrl: cleanEmbedUrl,
         type: 'clean-embed',
         isDefault: true
       },
@@ -2248,6 +2350,7 @@ app.get('/api/resolve-m3u8/:id', async (req: Request, res: Response) => {
       }
     ];
 
+    setStreamCorsHeaders(req, res);
     res.json({
       success: true,
       channelId: id,
@@ -2255,6 +2358,8 @@ app.get('/api/resolve-m3u8/:id', async (req: Request, res: Response) => {
       lang: channelMeta.lang,
       category: channelMeta.category,
       slug: slug || `premium${id}`,
+      token,
+      exp,
       streamUrl: proxyStreamUrl,
       servers
     });
@@ -2268,12 +2373,14 @@ app.get('/api/resolve-m3u8/:id', async (req: Request, res: Response) => {
 app.get('/api/clean-embed/:folder/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   const safeId = String(id).replace(/[^0-9a-zA-Z_-]/g, '');
+  const embedExp = Math.floor(Date.now() / 1000) + 7200;
+  const embedToken = signStreamToken(safeId, embedExp);
 
   // Strict Content-Security-Policy makes it impossible for any external ad script, popup, or frame to load
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline'; media-src * blob: data:; connect-src *; img-src 'self' data: blob:; worker-src blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';"
+    "default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline'; media-src * blob: data:; connect-src *; img-src 'self' data: blob:; worker-src blob:; frame-ancestors 'self' https://*.workers.dev https://*.pages.dev http://localhost:* https://*.run.app https://*.vercel.app; object-src 'none'; base-uri 'none'; form-action 'none';"
   );
   res.removeHeader('X-Frame-Options');
 
@@ -2516,7 +2623,7 @@ app.get('/api/clean-embed/:folder/:id', async (req: Request, res: Response) => {
           hls = null;
         }
 
-        var streamUrl = '/api/proxy-stream/${safeId}/live.m3u8?source=' + currentSourceMode + '&_t=' + Date.now();
+        var streamUrl = '/api/proxy-stream/${safeId}/live.m3u8?source=' + currentSourceMode + '&token=${embedToken}&exp=${embedExp}&_t=' + Date.now();
 
         if (window.Hls && Hls.isSupported()) {
           hls = new Hls({
@@ -2718,7 +2825,11 @@ async function getCastServerM3u8(channelId: string | number): Promise<{ m3u8Url:
   return null;
 }
 
-async function fetchDembedRewrittenPlaylist(id: string | number): Promise<string | null> {
+async function fetchDembedRewrittenPlaylist(
+  id: string | number,
+  token?: string,
+  exp?: number | string
+): Promise<string | null> {
   const attemptFetch = async (forceNewToken: boolean): Promise<string | null> => {
     try {
       const dembedM3u8Url = await getDembedAuthedM3u8Url(id, forceNewToken);
@@ -2739,6 +2850,10 @@ async function fetchDembedRewrittenPlaylist(id: string | number): Promise<string
       const rawLines = playlistText.split('\n');
       const outLines: string[] = [];
       let lastExtInfDuration = 5.0;
+      const authSuffix =
+        token && exp
+          ? `&id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}&exp=${encodeURIComponent(exp)}`
+          : '';
 
       for (const line of rawLines) {
         const trimmed = line.trim();
@@ -2755,7 +2870,7 @@ async function fetchDembedRewrittenPlaylist(id: string | number): Promise<string
         if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
           abs = new URL(trimmed, baseUrl).href;
         }
-        outLines.push(`/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=dembed`);
+        outLines.push(`/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=dembed${authSuffix}`);
         // Dembed's upstream restreamer has a PTS discontinuity right after partial segments (<4.95s).
         // Injecting #EXT-X-DISCONTINUITY tells Hls.js to cleanly realign PTS without freezing video or jumping!
         if (lastExtInfDuration < 4.95) {
@@ -2776,7 +2891,11 @@ async function fetchDembedRewrittenPlaylist(id: string | number): Promise<string
   return attemptFetch(true);
 }
 
-async function fetchCastRewrittenPlaylist(id: string | number): Promise<string | null> {
+async function fetchCastRewrittenPlaylist(
+  id: string | number,
+  token?: string,
+  exp?: number | string
+): Promise<string | null> {
   try {
     const castInfo = await getCastServerM3u8(id);
     if (!castInfo) return null;
@@ -2793,6 +2912,11 @@ async function fetchCastRewrittenPlaylist(id: string | number): Promise<string |
     if (!playlistText.includes('#EXTM3U')) return null;
 
     const baseUrl = castInfo.m3u8Url.substring(0, castInfo.m3u8Url.lastIndexOf('/') + 1);
+    const authSuffix =
+      token && exp
+        ? `&id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}&exp=${encodeURIComponent(exp)}`
+        : '';
+
     return playlistText
       .split('\n')
       .map(line => {
@@ -2802,7 +2926,7 @@ async function fetchCastRewrittenPlaylist(id: string | number): Promise<string |
         if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
           abs = new URL(trimmed, baseUrl).href;
         }
-        return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=cast&origin=${encodeURIComponent(castInfo.origin)}`;
+        return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=cast&origin=${encodeURIComponent(castInfo.origin)}${authSuffix}`;
       })
       .join('\n');
   } catch {
@@ -2810,7 +2934,11 @@ async function fetchCastRewrittenPlaylist(id: string | number): Promise<string |
   }
 }
 
-async function fetchWideRewrittenPlaylist(id: string | number): Promise<string | null> {
+async function fetchWideRewrittenPlaylist(
+  id: string | number,
+  token?: string,
+  exp?: number | string
+): Promise<string | null> {
   try {
     const slug = await getChannelStreamSlug(id);
     if (!slug) return null;
@@ -2834,6 +2962,11 @@ async function fetchWideRewrittenPlaylist(id: string | number): Promise<string |
     }
 
     const baseUrl = directUrl.substring(0, directUrl.lastIndexOf('/') + 1);
+    const authSuffix =
+      token && exp
+        ? `&id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}&exp=${encodeURIComponent(exp)}`
+        : '';
+
     return playlistText
       .split('\n')
       .map(line => {
@@ -2843,7 +2976,7 @@ async function fetchWideRewrittenPlaylist(id: string | number): Promise<string |
         if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
           abs = new URL(trimmed, baseUrl).href;
         }
-        return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=wide`;
+        return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=wide${authSuffix}`;
       })
       .join('\n');
   } catch {
@@ -2858,9 +2991,25 @@ const stickyProviderMap = new Map<string, { provider: 'dembed' | 'cast' | 'wide'
 app.get('/api/proxy-stream/:id/live.m3u8', async (req: Request, res: Response) => {
   const id = req.params.id;
   const preferredSource = (req.query.source as string) || 'dembed';
+  const token = req.query.token as string | undefined;
+  const exp = req.query.exp as string | undefined;
 
+  // 1. Anti-Hotlinking Origin & Referer Verification
+  const origin = req.headers.origin;
+  const referer = req.headers.referer;
+  if ((origin && !isOriginAllowed(origin, req.headers.host)) || (referer && !isOriginAllowed(referer, req.headers.host))) {
+    return res.status(403).send('#EXTM3U\n#EXT-X-ERROR: 403 Forbidden - Hotlinking not allowed\n');
+  }
+
+  // 2. Cryptographic Token Verification
+  if (!verifyStreamToken(id, exp, token)) {
+    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    return res.status(403).send('#EXTM3U\n#EXT-X-ERROR: 403 Forbidden - Stream signature missing or expired. Unauthorized fetch blocked.\n');
+  }
+
+  setStreamCorsHeaders(req, res);
   res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 
   try {
@@ -2882,11 +3031,11 @@ app.get('/api/proxy-stream/:id/live.m3u8', async (req: Request, res: Response) =
     for (const provider of baseOrder) {
       let playlist: string | null = null;
       if (provider === 'dembed') {
-        playlist = await fetchDembedRewrittenPlaylist(id);
+        playlist = await fetchDembedRewrittenPlaylist(id, token, exp);
       } else if (provider === 'cast') {
-        playlist = await fetchCastRewrittenPlaylist(id);
+        playlist = await fetchCastRewrittenPlaylist(id, token, exp);
       } else if (provider === 'wide') {
-        playlist = await fetchWideRewrittenPlaylist(id);
+        playlist = await fetchWideRewrittenPlaylist(id, token, exp);
       }
       if (playlist) {
         stickyProviderMap.set(stickyKey, { provider, ts: Date.now() });
@@ -2929,9 +3078,18 @@ app.get('/api/proxy-chunk', async (req: Request, res: Response) => {
   const url = req.query.url as string;
   const mode = (req.query.mode as string) || 'dembed';
   const customOrigin = (req.query.origin as string) || 'https://tossequip.net';
+  const chunkId = (req.query.id as string) || '*';
+  const token = req.query.token as string | undefined;
+  const exp = req.query.exp as string | undefined;
+
   if (!url) return res.status(400).send('Missing url');
 
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // Verify chunk token
+  if (!verifyStreamToken(chunkId, exp, token)) {
+    return res.status(403).send('403 Forbidden: Invalid or expired chunk token');
+  }
+
+  setStreamCorsHeaders(req, res);
 
   // 1. Check in-memory decoded TS segment cache first (<1ms response!)
   if (!url.includes('.m3u8')) {
@@ -2986,6 +3144,10 @@ app.get('/api/proxy-chunk', async (req: Request, res: Response) => {
           const text = await upstreamRes.text();
           if (text.includes('#EXTM3U')) {
             const baseUrl = url.substring(0, url.lastIndexOf('/') + 1);
+            const authSuffix =
+              token && exp
+                ? `&id=${encodeURIComponent(chunkId)}&token=${encodeURIComponent(token)}&exp=${encodeURIComponent(exp)}`
+                : '';
             const rewritten = text
               .split('\n')
               .map(line => {
@@ -2995,7 +3157,7 @@ app.get('/api/proxy-chunk', async (req: Request, res: Response) => {
                 if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
                   abs = new URL(trimmed, baseUrl).href;
                 }
-                return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=${mode}&origin=${encodeURIComponent(customOrigin)}`;
+                return `/api/proxy-chunk?url=${encodeURIComponent(abs)}&mode=${mode}&origin=${encodeURIComponent(customOrigin)}${authSuffix}`;
               })
               .join('\n');
             return { kind: 'm3u8' as const, data: rewritten };
