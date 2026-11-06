@@ -294,8 +294,8 @@ export const WatchRoomPage: React.FC = () => {
 
     let cancelled = false;
     fetch(getApiUrl(`/api/resolve-m3u8/${numId}`))
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
+      .then(r => (r.ok ? (r.json() as Promise<any>) : null))
+      .then((data: any) => {
         if (!cancelled && data && data.success && data.channelName) {
           setResolvedMeta({
             id: numId,

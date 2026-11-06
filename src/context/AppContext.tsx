@@ -213,7 +213,71 @@ async function fetchHtmlViaCorsProxy(targetUrl: string): Promise<string | null> 
 }
 
 function isExcludedChannelName(rawName: string): boolean {
-  return /ssc|alkass|al kass|abu dhabi|ad sport|dubai|israel|5plus|sport\s*[1-5]\s*il|yes\s*sport|one\s*il/i.test(rawName);
+  return /ssc|alkass|al kass|abu dhabi|ad sport|dubai|israel|5plus|5stars|5live|5sport|sport\s*[1-5]\s*israel|sport\s*[1-5]\s*il|yes\s*sport|one\s*il/i.test(rawName);
+}
+
+function isCompetitionWithBeinMenaRights(competition: string): boolean {
+  if (!competition) return false;
+  const c = competition.toLowerCase();
+  if (
+    c.includes('ligue 2') ||
+    c.includes('championship') ||
+    c.includes('league one') ||
+    c.includes('league two') ||
+    c.includes('segunda') ||
+    c.includes('la liga 2') ||
+    c.includes('hypermotion') ||
+    c.includes('serie b') ||
+    c.includes('serie c') ||
+    c.includes('2. bundesliga') ||
+    c.includes('bundesliga 2') ||
+    c.includes('cyprus') ||
+    c.includes('serbia') ||
+    c.includes('austria') ||
+    c.includes('poland') ||
+    c.includes('croatia') ||
+    c.includes('greece') ||
+    c.includes('romania') ||
+    c.includes('czech') ||
+    c.includes('denmark') ||
+    c.includes('sweden') ||
+    c.includes('norway') ||
+    c.includes('mexico') ||
+    c.includes('liga mx') ||
+    c.includes('peru') ||
+    c.includes('colombia') ||
+    c.includes('chile') ||
+    c.includes('argentina') ||
+    c.includes('women') ||
+    c.includes('frauen') ||
+    c.includes('u17') ||
+    c.includes('u19') ||
+    c.includes('u20') ||
+    c.includes('u21')
+  ) {
+    return false;
+  }
+  return (
+    c.includes('champions league') ||
+    c.includes('europa league') ||
+    c.includes('conference league') ||
+    c.includes('premier league') ||
+    c.includes('la liga') ||
+    c.includes('ligue 1') ||
+    c.includes('bundesliga') ||
+    c.includes('fa cup') ||
+    c.includes('carabao') ||
+    c.includes('efl cup') ||
+    c.includes('afc') ||
+    c.includes('caf') ||
+    c.includes('world cup') ||
+    c.includes('nations league') ||
+    c.includes('أبطال أوروبا') ||
+    c.includes('الدوري الإنجليزي') ||
+    c.includes('الدوري الإسباني') ||
+    c.includes('الدوري الفرنسي') ||
+    c.includes('الدوري الألماني')
+  );
 }
 
 function categorizeChannelClient(name: string): { category: 'ar' | 'bein' | 'euro' | 'other'; subcat: string; lang: string } {
@@ -412,10 +476,21 @@ async function scrapeDliveCatalogClient(targetDateKey: 'yesterday' | 'today' | '
         const chId = parseInt(m[1], 10);
         const chName = decodeHtmlEntitiesClient(m[2].replace(/<[^>]+>/g, ''));
         if (!chId || !chName || seenInEvent.has(chId) || isExcludedChannelName(chName)) continue;
+
+        const isBeinArCandidate = (chId >= 91 && chId <= 99) || chId === 578 || /bein\s*sports\s*mena\s*[1-9]\b/i.test(chName);
+        if (isBeinArCandidate && !isCompetitionWithBeinMenaRights(competition)) {
+          continue;
+        }
+
         seenInEvent.add(chId);
 
-        const isBeinAr = (chId >= 91 && chId <= 99) || chId === 578 || /bein\s*sports\s*mena\s*[1-9]\b/i.test(chName);
-        const displayName = isBeinAr && chId >= 91 && chId <= 99 ? `beIN Sports ${chId - 90} HD` : chName;
+        const isBeinAr = isBeinArCandidate && isCompetitionWithBeinMenaRights(competition);
+        let displayName = chName;
+        if (isBeinAr && chId >= 91 && chId <= 99) {
+          displayName = `beIN Sports ${chId - 90} HD`;
+        } else if (chId === 1 || /thmanyah/i.test(chName)) {
+          displayName = 'ثمانية (Thmanyah) HD';
+        }
 
         eventChannels.push({
           channel_id: chId,
@@ -487,6 +562,43 @@ async function scrapeDliveCatalogClient(targetDateKey: 'yesterday' | 'today' | '
         status = 'FIXTURE';
         statusText = 'لم تبدأ بعد';
       }
+
+      eventChannels.sort((a, b) => {
+        const score = (c: { channel_id: number; channel_name: string; isBeinArabic: boolean }) => {
+          if (c.isBeinArabic) return 100;
+          // If Saudi / Arab competition, prioritize Arabic broadcaster (Thmanyah, SSC, etc.)
+          if (/saudi|arabia|pro league|roshn|king cup|كأس الملك|دوري روشن|السعودي/i.test(competition)) {
+            if (/thmanyah|ثمانية|ssc|riyadiah/i.test(c.channel_name) || c.channel_id === 1) return 98;
+          }
+          // General Arabic broadcaster
+          if (/thmanyah|ثمانية|عربي|arabic/i.test(c.channel_name) || c.channel_id === 1) return 96;
+
+          if (/ligue 2|ligue 1|france|coupe de france/i.test(competition)) {
+            if (/france|canal\+|ligue1\+/i.test(c.channel_name)) return 95;
+          }
+          if (/premier league|championship|fa cup|carabao|england/i.test(competition)) {
+            if (/uk|sky sports|tnt sports/i.test(c.channel_name)) return 95;
+          }
+          if (/la liga|spain|copa del rey/i.test(competition)) {
+            if (/spain|dazn laliga|movistar/i.test(c.channel_name)) return 95;
+          }
+          if (/bundesliga|germany|dfb/i.test(competition)) {
+            if (/sky sport bundesliga|dazn.*de/i.test(c.channel_name)) return 95;
+          }
+          if (/serie a|serie b|italy|coppa italia/i.test(competition)) {
+            if (/dazn italia|sky sport.*it/i.test(c.channel_name)) return 95;
+          }
+          if (/portugal|primeira/i.test(competition)) {
+            if (/sport tv.*portugal|sport tv/i.test(c.channel_name)) return 95;
+          }
+
+          if (/bein/i.test(c.channel_name)) return 75;
+          if (/sky|tnt|dazn|paramount|canal\+|arena|espn|cbs|eurosport|sport tv|premier/i.test(c.channel_name)) return 60;
+          if (/event/i.test(c.channel_name)) return 10;
+          return 40;
+        };
+        return score(b) - score(a);
+      });
 
       events.push({
         id: `dlive_ev_${d}_${i}_${gmtMinutes}`,
@@ -852,7 +964,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
-        const data = await res.json();
+        const data = (await res.json()) as any;
         if (data && data.success && Array.isArray(data.channels) && data.channels.length > 0) {
           setChannels(data.channels);
           try {
@@ -909,7 +1021,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
-        const data = await res.json();
+        const data = (await res.json()) as any;
         if (data && data.success && Array.isArray(data.matches)) {
           setMatches(data.matches);
           setLastMatchesUpdated(new Date());
@@ -972,7 +1084,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
       const contentType = res.headers.get('content-type') || '';
       if (!res.ok || !contentType.includes('application/json')) return;
-      const data = await res.json();
+      const data = (await res.json()) as any;
       if (data && data.success && data.epg) {
         setEpg(data.epg);
       }

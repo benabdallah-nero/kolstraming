@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
+    "build:worker": "vite build && wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
     "preview": "vite preview",
     "start": "node server.ts",
     "clean": "rm -rf dist server.js",
@@ -32,9 +34,9 @@
     "@types/react-dom": "^19.3.0",
     "@vercel/node": "^15.0.0",
     "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "wrangler": "^4.158.0"
   }
 }

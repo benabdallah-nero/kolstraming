@@ -31,8 +31,8 @@ export async function getStreamAuth(channelId: string | number): Promise<CachedA
     });
 
     if (res.ok) {
-      const data = await res.json();
-      if (data.token && data.exp) {
+      const data: any = await res.json();
+      if (data && data.token && data.exp) {
         const authData: CachedAuth = {
           token: String(data.token),
           exp: Number(data.exp)
@@ -50,8 +50,8 @@ export async function getStreamAuth(channelId: string | number): Promise<CachedA
     const resolveEndpoint = getApiUrl(`/api/resolve-m3u8/${key}`);
     const res = await fetch(resolveEndpoint);
     if (res.ok) {
-      const data = await res.json();
-      if (data.token && data.exp) {
+      const data: any = await res.json();
+      if (data && data.token && data.exp) {
         const authData: CachedAuth = {
           token: String(data.token),
           exp: Number(data.exp)

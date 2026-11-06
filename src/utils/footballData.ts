@@ -1,4 +1,4 @@
-import {
+import type {
   LeagueInfo,
   StandingRow,
   MatchDetailsData,
@@ -7,8 +7,8 @@ import {
   MatchStatItem,
   MatchH2HItem,
   LiveMatch
-} from '../types';
-import { getTeamLogoSvg } from './teamLogos.js';
+} from '../types.ts';
+import { getTeamLogoSvg } from './teamLogos.ts';
 export { getTeamLogoSvg };
 
 export function getCurrentFootballSeason(): string {
@@ -501,7 +501,7 @@ export async function fetchStandingsWithFallback(
     if (res.ok) {
       const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
-        const data = await res.json();
+        const data = (await res.json()) as any;
         if (data && data.success && Array.isArray(data.standings) && data.standings.length > 0) {
           return {
             rows: data.standings,
@@ -542,7 +542,7 @@ export async function fetchStandingsWithFallback(
         { signal: AbortSignal.timeout(5500) }
       );
       if (!res.ok) return null;
-      const espnJson = await res.json();
+      const espnJson = (await res.json()) as any;
       const rows = parseEspnStandingsToArabic(espnJson, baseLeagueInfo);
       if (rows && rows.length > 0) {
         const espnSeasonMatch = String(
@@ -817,7 +817,7 @@ export async function fetchMatchDetailsWithFallback(
     if (res.ok) {
       const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
-        const data = await res.json();
+        const data = (await res.json()) as any;
         if (data && data.success && data.details) {
           const d: MatchDetailsData = data.details;
           if (
@@ -866,7 +866,7 @@ export async function fetchMatchDetailsWithFallback(
         { signal: AbortSignal.timeout(4500) }
       );
       if (sbRes.ok) {
-        const sbJson = await sbRes.json();
+        const sbJson = (await sbRes.json()) as any;
         const events = sbJson?.events || [];
         for (const ev of events) {
           const compObj = ev?.competitions?.[0];
@@ -906,7 +906,7 @@ export async function fetchMatchDetailsWithFallback(
         { signal: AbortSignal.timeout(5000) }
       );
       if (sumRes.ok) {
-        const json = await sumRes.json();
+        const json = (await sumRes.json()) as any;
         if (json?.gameInfo?.venue?.fullName) {
           baseDetails.stadium = json.gameInfo.venue.fullName;
         }
@@ -1066,7 +1066,7 @@ export async function fetchMatchesByDateWithFallback(
     if (res.ok) {
       const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
-        const data = await res.json();
+        const data = (await res.json()) as any;
         if (data && data.success && Array.isArray(data.matches) && data.matches.length > 0) {
           return data.matches;
         }
