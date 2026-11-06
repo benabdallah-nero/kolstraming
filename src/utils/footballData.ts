@@ -250,7 +250,17 @@ const EN_TO_AR_TEAM_MAP: Array<[RegExp, string]> = [
   [/^al ettifaq|al-ettifaq$/i, 'الاتفاق'],
   [/^al taawoun|al-taawoun$/i, 'التعاون'],
   [/^al riyadh|al-riyadh$/i, 'الرياض'],
-  [/^al khaleej|al-khaleej$/i, 'الخليج']
+  [/^al khaleej|al-khaleej$/i, 'الخليج'],
+  [/^al fateh|al-fateh$/i, 'الفتح'],
+  [/^al fayha|al-fayha$/i, 'الفيحاء'],
+  [/^al okhdood|al-okhdood$/i, 'الأخدود'],
+  [/^al kholood|al-kholood$/i, 'الخلود'],
+  [/^damac$/i, 'ضمك'],
+  [/^al hazem|al-hazem$/i, 'الحزم'],
+  [/^al najma|al-najma$/i, 'النجمة'],
+  [/^al orobah|al-orobah$/i, 'العروبة'],
+  [/^al raed|al-raed$/i, 'الرائد'],
+  [/^al wehda|al-wehda$/i, 'الوحدة']
 ];
 
 export function translateTeamNameAr(name: string): string {
@@ -442,13 +452,13 @@ export function buildMatchDetailsForMatch(match: LiveMatch): MatchDetailsData {
     round: match.competition,
     events: [],
     lineupA: {
-      formation: '4-3-3',
+      formation: '',
       coach: '',
       startingXI: [],
       substitutes: []
     },
     lineupB: {
-      formation: '4-3-3',
+      formation: '',
       coach: '',
       startingXI: [],
       substitutes: []
@@ -456,32 +466,6 @@ export function buildMatchDetailsForMatch(match: LiveMatch): MatchDetailsData {
     stats: [],
     h2h: []
   };
-}
-
-export async function fetchViaCorsProxy(targetUrl: string, timeoutMs = 7000): Promise<string | null> {
-  const attempts: Array<{ url: string; headers?: Record<string, string> }> = [
-    { url: `https://r.jina.ai/${targetUrl}`, headers: { 'X-Return-Format': 'html' } },
-    { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}` },
-    { url: `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}` }
-  ];
-
-  try {
-    const html = await Promise.any(
-      attempts.map(async item => {
-        const res = await fetch(item.url, {
-          headers: item.headers,
-          signal: AbortSignal.timeout(timeoutMs)
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const text = await res.text();
-        if (!text || text.length < 200) throw new Error('Empty response');
-        return text;
-      })
-    );
-    return html;
-  } catch {
-    return null;
-  }
 }
 
 export async function fetchStandingsWithFallback(
@@ -509,86 +493,10 @@ export async function fetchStandingsWithFallback(
       }
     }
   } catch {
-    // Fall through to direct client-side live sources
+    // Network failure: return no standings rather than scraping in the browser.
   }
 
-  // 2. Client-Side Fallback A & B in parallel:
-  //    A) Yallakora Arabic Standings via CORS Proxy (covers all 9 leagues including Egypt & Morocco)
-  //    B) Direct ESPN Standings API (CORS-enabled natively in browsers for EPL, LaLiga, SerieA, Bundesliga, Ligue1, UCL, Saudi)
-  const ykPath = YALLAKORA_STANDING_PATHS[baseLeagueInfo.id];
-  const espnSlug = ESPN_LEAGUE_SLUGS[baseLeagueInfo.id];
-
-  const fetchYkClient = async (): Promise<{ rows: StandingRow[]; season: string } | null> => {
-    if (!ykPath) return null;
-    const html = await fetchViaCorsProxy(`https://www.yallakora.com${ykPath}`, 6500);
-    if (!html) return null;
-    const parsed = parseYallakoraStandingsHtml(html, baseLeagueInfo);
-    if (parsed && parsed.rows.length > 0) {
-      return {
-        rows: parsed.rows,
-        season: parsed.season || baseLeagueInfo.season
-      };
-    }
-    return null;
-  };
-
-  const fetchEspnClient = async (): Promise<{ rows: StandingRow[]; season: string } | null> => {
-    if (!espnSlug) return null;
-    try {
-      const res = await fetch(
-        `https://site.api.espn.com/apis/v2/sports/soccer/${espnSlug}/standings`,
-        { signal: AbortSignal.timeout(5500) }
-      );
-      if (!res.ok) return null;
-      const espnJson = await res.json();
-      const rows = parseEspnStandingsToArabic(espnJson, baseLeagueInfo);
-      if (rows && rows.length > 0) {
-        const espnSeasonMatch = String(
-          espnJson?.children?.[0]?.standings?.seasonDisplayName ||
-            espnJson?.seasons?.[0]?.displayName ||
-            ''
-        ).match(/(\d{4})[-/](\d{2,4})/);
-        const liveSeason = espnSeasonMatch
-          ? `${espnSeasonMatch[1]} / ${
-              espnSeasonMatch[2].length === 2
-                ? espnSeasonMatch[1].slice(0, 2) + espnSeasonMatch[2]
-                : espnSeasonMatch[2]
-            }`
-          : baseLeagueInfo.season;
-        return { rows, season: liveSeason };
-      }
-    } catch {
-      // ignore
-    }
-    return null;
-  };
-
-  const [ykResult, espnResult] = await Promise.all([fetchYkClient(), fetchEspnClient()]);
-  if (ykResult && ykResult.rows.length > 0) return ykResult;
-  if (espnResult && espnResult.rows.length > 0) return espnResult;
-
   return { rows: [], season: baseLeagueInfo.season };
-}
-
-function inferPosFromFormation(idx: number, formation: string): 'GK' | 'DEF' | 'MID' | 'FWD' {
-  if (idx === 0) return 'GK';
-  const parts = formation
-    .split('-')
-    .map(n => parseInt(n, 10))
-    .filter(n => !isNaN(n));
-  const defCount = parts[0] || 4;
-  const fwdCount = parts.length > 1 ? parts[parts.length - 1] : 3;
-  if (idx <= defCount) return 'DEF';
-  if (idx >= 11 - fwdCount) return 'FWD';
-  return 'MID';
-}
-
-function mapEspnPosCode(posAbbr: string): 'GK' | 'DEF' | 'MID' | 'FWD' {
-  const u = (posAbbr || '').toUpperCase();
-  if (u === 'G' || u === 'GK') return 'GK';
-  if (u.includes('D') || u.includes('B')) return 'DEF';
-  if (u.includes('F') || u.includes('W') || u === 'ST' || u === 'CF') return 'FWD';
-  return 'MID';
 }
 
 export function parseYallakoraEventsFromHtml(
@@ -830,221 +738,7 @@ export async function fetchMatchDetailsWithFallback(
       }
     }
   } catch {
-    // Fall through to client-side live fetch
-  }
-
-  // 2. Client-Side Fallback: Yallakora match page + ESPN summary API
-  const ykMatch = match.id.match(/^yk_(\d+)$/);
-  const ykId = ykMatch && parseInt(ykMatch[1], 10) > 1000 ? ykMatch[1] : null;
-
-  if (ykId) {
-    const [pageHtml, minPage2Html] = await Promise.all([
-      fetchViaCorsProxy(`https://www.yallakora.com/Match/?matchID=${ykId}`, 6000),
-      fetchViaCorsProxy(
-        `https://www.yallakora.com/match/MatchMinByMinPaging?matchId=${ykId}&PageIndex=2&PageSize=30`,
-        6000
-      )
-    ]);
-
-    if (pageHtml) {
-      const parsedEvents = parseYallakoraEventsFromHtml(pageHtml, minPage2Html || '');
-      if (parsedEvents.length > 0) {
-        baseDetails.events = parsedEvents;
-      }
-    }
-  }
-
-  // Also query ESPN Scoreboard & Summary API (CORS-enabled directly in browser)
-  try {
-    let espnEventId = match.id.startsWith('espn_') ? match.id.replace('espn_', '') : null;
-
-    if (!espnEventId) {
-      const sbRes = await fetch(
-        'https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard',
-        { signal: AbortSignal.timeout(4500) }
-      );
-      if (sbRes.ok) {
-        const sbJson = await sbRes.json();
-        const events = sbJson?.events || [];
-        for (const ev of events) {
-          const compObj = ev?.competitions?.[0];
-          const competitors = compObj?.competitors || [];
-          if (competitors.length < 2) continue;
-          const home = competitors.find((c: any) => c.homeAway === 'home') || competitors[0];
-          const away = competitors.find((c: any) => c.homeAway === 'away') || competitors[1];
-          const rawHome = home?.team?.displayName || home?.team?.name || '';
-          const rawAway = away?.team?.displayName || away?.team?.name || '';
-          const arHome = translateTeamNameAr(rawHome);
-          const arAway = translateTeamNameAr(rawAway);
-
-          const matchA =
-            match.teamA.name.includes(arHome) ||
-            arHome.includes(match.teamA.name) ||
-            match.teamA.name.toLowerCase() === rawHome.toLowerCase();
-          const matchB =
-            match.teamB.name.includes(arAway) ||
-            arAway.includes(match.teamB.name) ||
-            match.teamB.name.toLowerCase() === rawAway.toLowerCase();
-
-          if ((matchA && matchB) || (matchA && ev.id) || (matchB && ev.id)) {
-            if (matchA && matchB) {
-              espnEventId = String(ev.id);
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    if (espnEventId) {
-      const sumRes = await fetch(
-        `https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${encodeURIComponent(
-          espnEventId
-        )}`,
-        { signal: AbortSignal.timeout(5000) }
-      );
-      if (sumRes.ok) {
-        const json = await sumRes.json();
-        if (json?.gameInfo?.venue?.fullName) {
-          baseDetails.stadium = json.gameInfo.venue.fullName;
-        }
-
-        const rosters = json?.rosters || [];
-        const homeRoster = rosters.find((r: any) => r.homeAway === 'home') || rosters[0];
-        const awayRoster = rosters.find((r: any) => r.homeAway === 'away') || rosters[1];
-
-        const parseRoster = (rObj: any): MatchLineupTeam => {
-          const formation = rObj?.formation || '4-3-3';
-          const list = Array.isArray(rObj?.roster) ? rObj.roster : [];
-          const startingXI = list
-            .filter((p: any) => p.starter)
-            .map((p: any, idx: number) => ({
-              number: parseInt(p.jersey || String(idx + 1), 10) || idx + 1,
-              name: p.athlete?.displayName || p.athlete?.fullName || '',
-              position: mapEspnPosCode(p.position?.abbreviation || ''),
-              isCaptain: !!p.captain
-            }))
-            .filter((p: any) => p.name);
-
-          const substitutes = list
-            .filter((p: any) => !p.starter)
-            .map((p: any, idx: number) => ({
-              number: parseInt(p.jersey || String(idx + 12), 10) || idx + 12,
-              name: p.athlete?.displayName || p.athlete?.fullName || '',
-              position: mapEspnPosCode(p.position?.abbreviation || '')
-            }))
-            .filter((p: any) => p.name);
-
-          return {
-            formation,
-            coach: 'المدير الفني',
-            startingXI: startingXI.map((p: any, idx: number) => ({
-              ...p,
-              position: p.position || inferPosFromFormation(idx, formation)
-            })),
-            substitutes
-          };
-        };
-
-        if (homeRoster && baseDetails.lineupA.startingXI.length === 0) {
-          baseDetails.lineupA = parseRoster(homeRoster);
-        }
-        if (awayRoster && baseDetails.lineupB.startingXI.length === 0) {
-          baseDetails.lineupB = parseRoster(awayRoster);
-        }
-
-        if (baseDetails.events.length === 0) {
-          const homeTeamName = homeRoster?.team?.displayName || '';
-          const keyEvents = json?.keyEvents || [];
-          const espnEvents: MatchEventItem[] = [];
-          keyEvents.forEach((ke: any, idx: number) => {
-            const tCode = String(ke?.type?.type || ke?.type?.text || '').toLowerCase();
-            const clock = ke?.clock?.displayValue || '';
-            if (!clock) return;
-            const isHome = ke?.team?.displayName === homeTeamName;
-            const team: 'A' | 'B' = isHome ? 'A' : 'B';
-            const p1 = ke?.participants?.[0]?.athlete?.displayName || '';
-            const p2 = ke?.participants?.[1]?.athlete?.displayName || '';
-
-            if (tCode.includes('goal') || ke?.scoringPlay) {
-              espnEvents.push({
-                id: `espn_ev_${idx}`,
-                minute: clock,
-                team,
-                type: tCode.includes('penalty') ? 'penalty_goal' : 'goal',
-                player: p1 || ke?.text || 'هدف',
-                assistOrSubOut: p2 ? `تمريرة حاسمة: ${p2}` : undefined
-              });
-            } else if (tCode.includes('yellow') && p1) {
-              espnEvents.push({
-                id: `espn_ev_${idx}`,
-                minute: clock,
-                team,
-                type: 'yellow_card',
-                player: p1
-              });
-            } else if (tCode.includes('red') && p1) {
-              espnEvents.push({
-                id: `espn_ev_${idx}`,
-                minute: clock,
-                team,
-                type: 'red_card',
-                player: p1
-              });
-            } else if (tCode.includes('sub') && p1) {
-              espnEvents.push({
-                id: `espn_ev_${idx}`,
-                minute: clock,
-                team,
-                type: 'sub',
-                player: p1,
-                assistOrSubOut: p2 ? `خروج: ${p2}` : undefined
-              });
-            }
-          });
-          if (espnEvents.length > 0) {
-            baseDetails.events = espnEvents;
-          }
-        }
-
-        const boxTeams = json?.boxscore?.teams || [];
-        if (boxTeams.length >= 2 && baseDetails.stats.length === 0) {
-          const getStat = (tIdx: number, name: string) =>
-            boxTeams[tIdx]?.statistics?.find((s: any) => s.name === name)?.displayValue;
-
-          const statDefs: Array<[string, string]> = [
-            ['possessionPct', 'الاستحواذ على الكرة (%)'],
-            ['totalShots', 'إجمالي التسديدات'],
-            ['shotsOnTarget', 'التسديدات على المرمى'],
-            ['wonCorners', 'الضربات الركنية'],
-            ['foulsCommitted', 'الأخطاء المرتكبة'],
-            ['offsides', 'التسلل'],
-            ['saves', 'تصديات الحارس']
-          ];
-
-          const parsedStats: MatchStatItem[] = [];
-          for (const [key, label] of statDefs) {
-            const vA = getStat(0, key);
-            const vB = getStat(1, key);
-            if (vA !== undefined && vB !== undefined) {
-              const nA = parseFloat(vA) || 0;
-              const nB = parseFloat(vB) || 0;
-              const tot = nA + nB;
-              parsedStats.push({
-                label,
-                valueA: key === 'possessionPct' ? `${vA}%` : vA,
-                valueB: key === 'possessionPct' ? `${vB}%` : vB,
-                percentA: tot > 0 ? Math.round((nA / tot) * 100) : 50,
-                percentB: tot > 0 ? Math.round((nB / tot) * 100) : 50
-              });
-            }
-          }
-          baseDetails.stats = parsedStats;
-        }
-      }
-    }
-  } catch {
-    // ignore
+    // Network failure: return no details rather than scraping in the browser.
   }
 
   return baseDetails;
@@ -1069,102 +763,11 @@ export async function fetchMatchesByDateWithFallback(
       }
     }
   } catch {
-    // Fall through to client-side Yallakora date scraper
+    // Network failure: return no data instead of scraping third-party sites.
   }
 
-  const now = new Date();
-  const meccaNow = new Date(now.getTime() + 3 * 60 * 60 * 1000);
-  if (dateKey === 'yesterday') meccaNow.setUTCDate(meccaNow.getUTCDate() - 1);
-  else if (dateKey === 'tomorrow') meccaNow.setUTCDate(meccaNow.getUTCDate() + 1);
-  const mm = String(meccaNow.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(meccaNow.getUTCDate()).padStart(2, '0');
-  const yyyy = meccaNow.getUTCFullYear();
-  const ykDate = `${mm}/${dd}/${yyyy}`;
-  const ykUrl = `https://www.yallakora.com/matches-center?date=${encodeURIComponent(ykDate)}`;
+  return [];
 
-  const html = await fetchViaCorsProxy(ykUrl, 6500);
-  if (!html) return [];
-
-  const liveList: LiveMatch[] = [];
-  let matchIdx = 0;
-  const cards = html.split(/<div[^>]*class="[^"]*matchCard[^"]*"[^>]*>/);
-
-  for (let i = 1; i < cards.length; i++) {
-    const card = cards[i];
-    const tournMatch = card.match(/class="tourTitle"[^>]*>(.*?)<\/a>/s);
-    const tournament = tournMatch ? tournMatch[1].replace(/<[^>]+>/g, '').trim() : 'مباراة رسمية';
-    if (/طائرة|يد|سلة|قسم ثاني|القسم الثاني|درجة ثانية|هواة/i.test(tournament)) continue;
-
-    const items = card.split(/<div[^>]*livescorematchid=/i);
-    for (let j = 1; j < items.length; j++) {
-      const item = 'livescorematchid=' + items[j];
-      const ykIdMatch = item.match(/livescorematchid=["'](\d+)["']/i) || item.match(/\/match\/(\d+)\//i);
-      const ykMatchId = ykIdMatch ? ykIdMatch[1] : null;
-      const teamA = item.match(/class="teams teamA".*?<p>(.*?)<\/p>/s)?.[1]?.trim();
-      const teamB = item.match(/class="teams teamB".*?<p>(.*?)<\/p>/s)?.[1]?.trim();
-      if (!teamA || !teamB) continue;
-      if (/إسرائيل|الكيان|مكابي|هابويل|هبوعيل|تل أبيب|بئر سبع|بيتار|سخنين|maccabi|hapoel/i.test(`${teamA} ${teamB}`)) continue;
-
-      const rawChannel = item.match(/<div class="channel[^"]*">(.*?)<\/div>/)?.[1]?.replace(/<[^>]+>/g, '').trim() || '';
-      const mergedChannels: Array<{ channel_id: number; channel_name: string; quality: string; isBeinArabic: boolean }> = [];
-      const beinNumMatch =
-        rawChannel.match(/(?:bein\s*sports?|ب[يى]\s*إن\s*سبورت|ب[يى]\s*ان\s*سبورت)\s*(\d+)/i) ||
-        rawChannel.match(/(\d+)\s*(?:ب[يى]\s*إن\s*سبورت|ب[يى]\s*ان\s*سبورت)/i);
-      if (beinNumMatch) {
-        const num = parseInt(beinNumMatch[1], 10);
-        const chId = 90 + num;
-        if (chId >= 91 && chId <= 99) {
-          mergedChannels.push({
-            channel_id: chId,
-            channel_name: `beIN Sports ${num} HD`,
-            quality: '1080p FHD',
-            isBeinArabic: true
-          });
-        }
-      }
-
-      const timeStr = item.match(/class="time">(.*?)<\/span>/)?.[1]?.trim() || '21:00';
-      const rawStatus = item.match(/class="matchStatus[^"]*".*?<span>(.*?)<\/span>/s)?.[1]?.replace(/<[^>]+>/g, '').trim() || 'لم تبدأ';
-      let status: 'LIVE' | 'FIXTURE' | 'RESULT' = 'FIXTURE';
-      if (/مباشر|شوط|استراحة|الان|الآن/i.test(rawStatus)) status = 'LIVE';
-      else if (/انتهت/i.test(rawStatus)) status = 'RESULT';
-
-      const scores = [...item.matchAll(/<span class="score">([0-9]+)<\/span>/g)].map(m => parseInt(m[1], 10));
-      const scoreA = scores.length > 0 ? scores[0] : null;
-      const scoreB = scores.length > 1 ? scores[1] : null;
-
-      const logoA = item.match(/class="teams teamA".*?<img[^>]*src="([^"]+)"/s)?.[1]?.replace(/\\/g, '/');
-      const logoB = item.match(/class="teams teamB".*?<img[^>]*src="([^"]+)"/s)?.[1]?.replace(/\\/g, '/');
-
-      const hasBeinAr = mergedChannels.some(c => c.isBeinArabic);
-      const broadcasterLabel =
-        mergedChannels.length > 0
-          ? mergedChannels.slice(0, 3).map(c => c.channel_name).join(' / ')
-          : rawChannel || 'غير منقولة تلفزيونياً';
-
-      matchIdx++;
-      liveList.push({
-        id: ykMatchId ? `yk_${ykMatchId}` : `yk_${matchIdx}`,
-        competition: tournament,
-        teamA: { name: teamA, logo: logoA },
-        teamB: { name: teamB, logo: logoB },
-        scoreA,
-        scoreB,
-        status,
-        statusText: rawStatus,
-        minute: status === 'LIVE' ? (rawStatus || 'مباشر') : null,
-        time: `${timeStr} بتوقيت مكة`,
-        localTime: `${timeStr} بتوقيت مكة`,
-        channels: mergedChannels.slice(0, 6),
-        isBeinArabic: hasBeinAr,
-        broadcasterLabel,
-        network: hasBeinAr ? 'bein_ar' : mergedChannels.length > 0 ? 'other' : 'unbroadcast'
-      });
-    }
-  }
-
-  return liveList;
-}
 
 
 

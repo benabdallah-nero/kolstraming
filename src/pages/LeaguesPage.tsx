@@ -11,6 +11,7 @@ import {
   fetchStandingsWithFallback
 } from '../utils/footballData';
 import { MatchDetailsModal } from '../components/MatchDetailsModal';
+import { TeamLogo } from '../components/TeamLogo';
 import { usePageSeo } from '../hooks/usePageSeo';
 import {
   deriveStandingForm,
@@ -242,18 +243,11 @@ export const LeaguesPage: React.FC = () => {
                         </td>
                         <td className="py-2.5 px-3 border-l border-[var(--border-hairline)]">
                           <div className="flex items-center gap-2.5 min-w-[140px]">
-                            {row.team.logo ? (
-                              <img
-                                src={row.team.logo}
-                                alt={row.team.name}
-                                className="w-5 h-5 object-contain shrink-0"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="w-5 h-5 bg-[var(--bg-canvas)] border border-[var(--border-hairline)] flex items-center justify-center text-[9px] font-extrabold text-[var(--text-secondary)] shrink-0">
-                                {row.team.name.slice(0, 2)}
-                              </div>
-                            )}
+                            <TeamLogo
+                              name={row.team.name}
+                              src={row.team.logo}
+                              className="w-5 h-5 object-contain shrink-0"
+                            />
                             <span className="font-bold text-[var(--text-primary)] truncate">
                               {row.team.name}
                             </span>

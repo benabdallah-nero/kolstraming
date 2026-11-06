@@ -11,6 +11,7 @@ import { LiveMatch, MatchDateKey } from '../types';
 import { fetchMatchesByDateWithFallback } from '../utils/footballData';
 import { Pagination } from '../components/Pagination';
 import { MatchDetailsModal } from '../components/MatchDetailsModal';
+import { TeamLogo } from '../components/TeamLogo';
 import { usePageSeo } from '../hooks/usePageSeo';
 import {
   getKickoffCountdown,
@@ -457,17 +458,11 @@ export const SchedulePage: React.FC = () => {
                 <div className="lg:col-span-8 grid grid-cols-12 items-center gap-2 sm:gap-4 md:gap-5">
                   {/* Team A */}
                   <div className="col-span-4 flex flex-col sm:flex-row items-center sm:items-center text-center sm:text-right gap-1.5 sm:gap-3 min-w-0">
-                    {featuredTopMatch.teamA.logo ? (
-                      <img
-                        src={featuredTopMatch.teamA.logo}
-                        alt={featuredTopMatch.teamA.name}
-                        className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5 shrink-0"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-strong)] flex items-center justify-center font-display-ar text-sm sm:text-base font-extrabold text-[var(--text-primary)] shrink-0">
-                        {featuredTopMatch.teamA.name.slice(0, 2)}
-                      </div>
-                    )}
+                    <TeamLogo
+                      name={featuredTopMatch.teamA.name}
+                      src={featuredTopMatch.teamA.logo}
+                      className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5 shrink-0"
+                    />
                     <div className="min-w-0 w-full sm:flex-1">
                       <div
                         title={featuredTopMatch.teamA.name}
@@ -510,17 +505,11 @@ export const SchedulePage: React.FC = () => {
                         الضيف
                       </div>
                     </div>
-                    {featuredTopMatch.teamB.logo ? (
-                      <img
-                        src={featuredTopMatch.teamB.logo}
-                        alt={featuredTopMatch.teamB.name}
-                        className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5 shrink-0"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-strong)] flex items-center justify-center font-display-ar text-sm sm:text-base font-extrabold text-[var(--text-primary)] shrink-0">
-                        {featuredTopMatch.teamB.name.slice(0, 2)}
-                      </div>
-                    )}
+                    <TeamLogo
+                      name={featuredTopMatch.teamB.name}
+                      src={featuredTopMatch.teamB.logo}
+                      className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5 shrink-0"
+                    />
                   </div>
                 </div>
 
@@ -629,18 +618,11 @@ export const SchedulePage: React.FC = () => {
                         >
                           {match.teamA.name}
                         </span>
-                        {match.teamA.logo ? (
-                          <img
-                            src={match.teamA.logo}
-                            alt={match.teamA.name}
-                            className="w-7 h-7 sm:w-8 sm:h-8 object-contain rounded-full bg-[var(--bg-canvas)] p-0.5 border border-white/5 shrink-0"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-7 h-7 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-hairline)] flex items-center justify-center text-[10px] font-extrabold text-[var(--text-secondary)] shrink-0">
-                            {match.teamA.name.slice(0, 2)}
-                          </div>
-                        )}
+                        <TeamLogo
+                          name={match.teamA.name}
+                          src={match.teamA.logo}
+                          className="w-7 h-7 sm:w-8 sm:h-8 object-contain rounded-full bg-[var(--bg-canvas)] p-0.5 border border-white/5 shrink-0"
+                        />
                       </div>
 
                       {/* Score Box */}
@@ -668,18 +650,11 @@ export const SchedulePage: React.FC = () => {
 
                       {/* Team B */}
                       <div className="col-span-4 flex items-center gap-2.5 min-w-0 text-right">
-                        {match.teamB.logo ? (
-                          <img
-                            src={match.teamB.logo}
-                            alt={match.teamB.name}
-                            className="w-7 h-7 sm:w-8 sm:h-8 object-contain rounded-full bg-[var(--bg-canvas)] p-0.5 border border-white/5 shrink-0"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-7 h-7 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-hairline)] flex items-center justify-center text-[10px] font-extrabold text-[var(--text-secondary)] shrink-0">
-                            {match.teamB.name.slice(0, 2)}
-                          </div>
-                        )}
+                        <TeamLogo
+                          name={match.teamB.name}
+                          src={match.teamB.logo}
+                          className="w-7 h-7 sm:w-8 sm:h-8 object-contain rounded-full bg-[var(--bg-canvas)] p-0.5 border border-white/5 shrink-0"
+                        />
                         <span
                           className={`font-bold text-[var(--text-primary)] truncate ${
                             isImportant ? 'font-display-ar text-sm sm:text-base' : 'text-xs sm:text-sm'

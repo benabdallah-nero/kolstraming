@@ -7,12 +7,14 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Channel } from '../types';
+import { Channel, LiveMatch } from '../types';
 import { usePageSeo } from '../hooks/usePageSeo';
 import { getChannelBrandIdentity } from '../utils/channelBranding';
+import { TeamLogo } from '../components/TeamLogo';
 import {
   getKickoffCountdown,
-  formatBroadcastMinute
+  formatBroadcastMinute,
+  isMarqueeMatch
 } from '../utils/broadcastFormatters';
 
 type ChannelSortOption = 'default' | 'live_first' | 'id_asc' | 'name_asc';
@@ -84,10 +86,26 @@ export const HomePage: React.FC = () => {
 
   const spotlightMatches = useMemo(() => {
     if (!matches || matches.length === 0) return [];
+
+    // Lead with fixtures we can actually verify: real broadcaster data, a
+    // marquee competition, and a Yallakora/ESPN fixture ID. This prevents an
+    // arbitrary scrape from being presented as the match of the day.
+    const scoreMatch = (match: LiveMatch): number => {
+      let score = 0;
+      if (match.channels && match.channels.length > 0) score += 4;
+      if (match.isBeinArabic) score += 2;
+      if (isMarqueeMatch(match)) score += 2;
+      if (match.id.startsWith('yk_') || match.id.startsWith('espn_')) score += 1;
+      if (match.status === 'LIVE') score += 1;
+      return score;
+    };
+
     const liveOnes = matches.filter(m => m.status === 'LIVE');
     const upcomingOnes = matches.filter(m => m.status === 'FIXTURE');
     const finishedOnes = matches.filter(m => m.status === 'RESULT');
-    return [...liveOnes, ...upcomingOnes, ...finishedOnes].slice(0, 6);
+    return [...liveOnes, ...upcomingOnes, ...finishedOnes]
+      .sort((a, b) => scoreMatch(b) - scoreMatch(a))
+      .slice(0, 6);
   }, [matches]);
 
   const activeHeroMatch = spotlightMatches[selectedHeroIndex] || spotlightMatches[0] || null;
@@ -229,7 +247,9 @@ export const HomePage: React.FC = () => {
             <div className="px-5 py-3 bg-[var(--bg-elevated)]/90 border-b border-[var(--border-hairline)] flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
                 <span className="px-2.5 py-0.5 rounded-full bg-[var(--accent-primary)] text-[var(--accent-contrast)] font-display-ar text-[11px] font-extrabold uppercase">
-                  مباراة القمة
+                  {isMarqueeMatch(activeHeroMatch) && activeHeroMatch.channels.length > 0
+                    ? 'مباراة القمة'
+                    : 'مباراة اليوم'}
                 </span>
                 <span className="font-display-ar text-xs sm:text-sm font-bold text-[var(--text-primary)]">
                   {activeHeroMatch.competition}
@@ -271,17 +291,11 @@ export const HomePage: React.FC = () => {
               <div className="grid grid-cols-12 items-center gap-2 sm:gap-4 md:gap-6">
                 {/* Team A (Home) - 4 cols on mobile, 4.5 cols on sm+ */}
                 <div className="col-span-4 sm:col-span-4 lg:col-span-4 flex flex-col sm:flex-row items-center sm:items-center text-center sm:text-right gap-1.5 sm:gap-3.5 min-w-0">
-                  {activeHeroMatch.teamA.logo ? (
-                    <img
-                      src={activeHeroMatch.teamA.logo}
-                      alt={activeHeroMatch.teamA.name}
-                      className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-strong)] flex items-center justify-center font-display-ar text-sm sm:text-base font-extrabold text-[var(--text-primary)] shrink-0">
-                      {activeHeroMatch.teamA.name.slice(0, 2)}
-                    </div>
-                  )}
+                  <TeamLogo
+                    name={activeHeroMatch.teamA.name}
+                    src={activeHeroMatch.teamA.logo}
+                    className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5 shrink-0"
+                  />
                   <div className="min-w-0 w-full sm:flex-1">
                     <div
                       title={activeHeroMatch.teamA.name}
@@ -336,17 +350,11 @@ export const HomePage: React.FC = () => {
                       الفريق الضيف
                     </div>
                   </div>
-                  {activeHeroMatch.teamB.logo ? (
-                    <img
-                      src={activeHeroMatch.teamB.logo}
-                      alt={activeHeroMatch.teamB.name}
-                      className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-strong)] flex items-center justify-center font-display-ar text-sm sm:text-base font-extrabold text-[var(--text-primary)] shrink-0">
-                      {activeHeroMatch.teamB.name.slice(0, 2)}
-                    </div>
-                  )}
+                  <TeamLogo
+                    name={activeHeroMatch.teamB.name}
+                    src={activeHeroMatch.teamB.logo}
+                    className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5 shrink-0"
+                  />
                 </div>
               </div>
             </div>
@@ -453,17 +461,12 @@ export const HomePage: React.FC = () => {
                       <div className="space-y-1">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                            {m.teamA.logo ? (
-                              <img
-                                src={m.teamA.logo}
-                                alt=""
-                                className="w-3.5 h-3.5 object-contain rounded-full shrink-0 bg-[var(--bg-canvas)]"
-                              />
-                            ) : (
-                              <span className="w-3.5 h-3.5 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-hairline)] text-[8px] flex items-center justify-center font-bold text-[var(--text-muted)] shrink-0">
-                                {m.teamA.name.slice(0, 1)}
-                              </span>
-                            )}
+                            <TeamLogo
+                              name={m.teamA.name}
+                              src={m.teamA.logo}
+                              alt=""
+                              className="w-3.5 h-3.5 object-contain rounded-full shrink-0 bg-[var(--bg-canvas)]"
+                            />
                             <span
                               className="text-xs font-bold text-[var(--text-primary)] truncate"
                               title={m.teamA.name}
@@ -484,17 +487,12 @@ export const HomePage: React.FC = () => {
 
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                            {m.teamB.logo ? (
-                              <img
-                                src={m.teamB.logo}
-                                alt=""
-                                className="w-3.5 h-3.5 object-contain rounded-full shrink-0 bg-[var(--bg-canvas)]"
-                              />
-                            ) : (
-                              <span className="w-3.5 h-3.5 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-hairline)] text-[8px] flex items-center justify-center font-bold text-[var(--text-muted)] shrink-0">
-                                {m.teamB.name.slice(0, 1)}
-                              </span>
-                            )}
+                            <TeamLogo
+                              name={m.teamB.name}
+                              src={m.teamB.logo}
+                              alt=""
+                              className="w-3.5 h-3.5 object-contain rounded-full shrink-0 bg-[var(--bg-canvas)]"
+                            />
                             <span
                               className="text-xs font-bold text-[var(--text-primary)] truncate"
                               title={m.teamB.name}

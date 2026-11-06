@@ -11,6 +11,9 @@ import {
   buildMatchDetailsForMatch,
   parseYallakoraEventsFromHtml
 } from './src/utils/footballData';
+import { CHANNELS as CURATED_SPECIAL_CHANNELS } from './src/data/channels';
+import { resolveBroadcaster } from './src/utils/broadcasterResolver';
+import { findEventForTeams } from './src/utils/teamMatching';
 
 interface Env {
   ASSETS?: {
@@ -129,62 +132,7 @@ function isOriginAllowedEdge(originOrReferer: string | null | undefined, request
 }
 
 // Core 24/7 base channels (verified IDs from DaddyLive catalog)
-const CURATED_SPECIAL_CHANNELS = [
-  { id: 91, name: 'beIN Sports 1 Arabic', arabicName: 'بي إن سبورت 1 HD', category: 'ar', subcat: 'bein_ar', quality: '1080p FHD', lang: 'Arabic', logo: 'bein1.png', country: 'QA' },
-  { id: 92, name: 'beIN Sports 2 Arabic', arabicName: 'بي إن سبورت 2 HD', category: 'ar', subcat: 'bein_ar', quality: '1080p FHD', lang: 'Arabic', logo: 'bein2.png', country: 'QA' },
-  { id: 93, name: 'beIN Sports 3 Arabic', arabicName: 'بي إن سبورت 3 HD', category: 'ar', subcat: 'bein_ar', quality: '1080p FHD', lang: 'Arabic', logo: 'bein3.png', country: 'QA' },
-  { id: 94, name: 'beIN Sports 4 Arabic', arabicName: 'بي إن سبورت 4 HD', category: 'ar', subcat: 'bein_ar', quality: '1080p FHD', lang: 'Arabic', logo: 'bein4.png', country: 'QA' },
-  { id: 95, name: 'beIN Sports 5 Arabic', arabicName: 'بي إن سبورت 5 HD', category: 'ar', subcat: 'bein_ar', quality: '1080p FHD', lang: 'Arabic', logo: 'bein5.png', country: 'QA' },
-  { id: 96, name: 'beIN Sports 6 Arabic', arabicName: 'بي إن سبورت 6 HD', category: 'ar', subcat: 'bein_ar', quality: '1080p FHD', lang: 'Arabic', logo: 'bein6.png', country: 'QA' },
-  { id: 97, name: 'beIN Sports 7 Arabic', arabicName: 'بي إن سبورت 7 HD', category: 'ar', subcat: 'bein_ar', quality: '1080p FHD', lang: 'Arabic', logo: 'bein7.png', country: 'QA' },
-  { id: 98, name: 'beIN Sports 8 Arabic', arabicName: 'بي إن سبورت 8 HD', category: 'ar', subcat: 'bein_ar', quality: '1080p FHD', lang: 'Arabic', logo: 'bein8.png', country: 'QA' },
-  { id: 99, name: 'beIN Sports 9 Arabic', arabicName: 'بي إن سبورت 9 HD', category: 'ar', subcat: 'bein_ar', quality: '1080p FHD', lang: 'Arabic', logo: 'bein9.png', country: 'QA' },
-  { id: 61, name: 'beIN Sports MENA English 1', arabicName: 'بي إن سبورت الإنجليزية 1', category: 'bein', subcat: 'bein_mena', quality: '1080p FHD', lang: 'English', logo: 'bein_en.png', country: 'QA' },
-  { id: 90, name: 'beIN Sports MENA English 2', arabicName: 'بي إن سبورت الإنجليزية 2', category: 'bein', subcat: 'bein_mena', quality: '1080p FHD', lang: 'English', logo: 'bein_en2.png', country: 'QA' },
-  { id: 100, name: 'beIN SPORTS XTRA 1', arabicName: 'بي إن سبورت إكسترا 1', category: 'bein', subcat: 'bein_xtra', quality: '1080p FHD', lang: 'English', logo: 'bein_xtra.png', country: 'USA' },
-  { id: 578, name: 'BeIN Sports HD Qatar', arabicName: 'بي إن سبورت الإخبارية', category: 'ar', subcat: 'bein_ar', quality: '1080p FHD', lang: 'Arabic', logo: 'bein_news.png', country: 'QA' },
-  { id: 425, name: 'BeIN SPORTS USA', category: 'bein', subcat: 'bein_us', quality: '1080p FHD', lang: 'English', logo: 'bein_us.png', country: 'US' },
-  { id: 772, name: 'Eurosport 1 France', category: 'euro', subcat: 'eurosport', quality: '1080p FHD', lang: 'French', logo: 'eurosport1.png', country: 'FR' },
-  { id: 773, name: 'Eurosport 2 France', category: 'euro', subcat: 'eurosport', quality: '1080p FHD', lang: 'French', logo: 'eurosport2.png', country: 'FR' },
-  { id: 524, name: 'EuroSport 1 Spain', category: 'euro', subcat: 'eurosport', quality: '1080p FHD', lang: 'Spanish', logo: 'eurosport1.png', country: 'ES' },
-  { id: 525, name: 'EuroSport 2 Spain', category: 'euro', subcat: 'eurosport', quality: '1080p FHD', lang: 'Spanish', logo: 'eurosport2.png', country: 'ES' },
-  { id: 878, name: 'EuroSport 1 Italy', category: 'euro', subcat: 'eurosport', quality: '1080p FHD', lang: 'Italian', logo: 'eurosport1.png', country: 'IT' },
-  { id: 879, name: 'EuroSport 2 Italy', category: 'euro', subcat: 'eurosport', quality: '1080p FHD', lang: 'Italian', logo: 'eurosport2.png', country: 'IT' },
-  { id: 57, name: 'EuroSport 1 Poland', category: 'euro', subcat: 'eurosport', quality: '1080p FHD', lang: 'Polish', logo: 'eurosport1.png', country: 'PL' },
-  { id: 58, name: 'EuroSport 2 Poland', category: 'euro', subcat: 'eurosport', quality: '1080p FHD', lang: 'Polish', logo: 'eurosport2.png', country: 'PL' },
-  { id: 41, name: 'EuroSport 1 Greece', category: 'euro', subcat: 'eurosport', quality: '1080p FHD', lang: 'Greek', logo: 'eurosport1.png', country: 'GR' },
-  { id: 42, name: 'EuroSport 2 Greece', category: 'euro', subcat: 'eurosport', quality: '1080p FHD', lang: 'Greek', logo: 'eurosport2.png', country: 'GR' },
-  { id: 233, name: 'Eurosport 1 NL', category: 'euro', subcat: 'eurosport', quality: '1080p FHD', lang: 'Dutch', logo: 'eurosport1.png', country: 'NL' },
-  { id: 234, name: 'Eurosport 2 NL', category: 'euro', subcat: 'eurosport', quality: '1080p FHD', lang: 'Dutch', logo: 'eurosport2.png', country: 'NL' },
-  { id: 231, name: 'Eurosport 1 Sweden/Nordic', category: 'euro', subcat: 'eurosport', quality: '1080p FHD', lang: 'Swedish', logo: 'eurosport1.png', country: 'SE' },
-  { id: 232, name: 'Eurosport 2 Sweden/Nordic', category: 'euro', subcat: 'eurosport', quality: '1080p FHD', lang: 'Swedish', logo: 'eurosport2.png', country: 'SE' },
-  { id: 116, name: 'beIN SPORTS 1 France', category: 'bein', subcat: 'bein_fr', quality: '1080p FHD', lang: 'French', logo: 'bein1_fr.png', country: 'FR' },
-  { id: 117, name: 'beIN SPORTS 2 France', category: 'bein', subcat: 'bein_fr', quality: '1080p FHD', lang: 'French', logo: 'bein2_fr.png', country: 'FR' },
-  { id: 118, name: 'beIN SPORTS 3 France', category: 'bein', subcat: 'bein_fr', quality: '1080p FHD', lang: 'French', logo: 'bein3_fr.png', country: 'FR' },
-  { id: 494, name: 'beIN Sports MAX 4 France', category: 'bein', subcat: 'bein_fr', quality: '1080p FHD', lang: 'French', logo: 'bein_max.png', country: 'FR' },
-  { id: 495, name: 'beIN Sports MAX 5 France', category: 'bein', subcat: 'bein_fr', quality: '1080p FHD', lang: 'French', logo: 'bein_max.png', country: 'FR' },
-  { id: 496, name: 'beIN Sports MAX 6 France', category: 'bein', subcat: 'bein_fr', quality: '1080p FHD', lang: 'French', logo: 'bein_max.png', country: 'FR' },
-  { id: 497, name: 'beIN Sports MAX 7 France', category: 'bein', subcat: 'bein_fr', quality: '1080p FHD', lang: 'French', logo: 'bein_max.png', country: 'FR' },
-  { id: 498, name: 'beIN Sports MAX 8 France', category: 'bein', subcat: 'bein_fr', quality: '1080p FHD', lang: 'French', logo: 'bein_max.png', country: 'FR' },
-  { id: 499, name: 'beIN Sports MAX 9 France', category: 'bein', subcat: 'bein_fr', quality: '1080p FHD', lang: 'French', logo: 'bein_max.png', country: 'FR' },
-  { id: 500, name: 'beIN Sports MAX 10 France', category: 'bein', subcat: 'bein_fr', quality: '1080p FHD', lang: 'French', logo: 'bein_max.png', country: 'FR' },
-  { id: 372, name: 'beIN SPORTS en Español', category: 'bein', subcat: 'bein_es', quality: '1080p FHD', lang: 'Spanish', logo: 'bein_es.png', country: 'US' },
-  { id: 491, name: 'beIN SPORTS Australia 1', category: 'bein', subcat: 'bein_au', quality: '1080p FHD', lang: 'English', logo: 'bein_au.png', country: 'AU' },
-  { id: 492, name: 'beIN SPORTS Australia 2', category: 'bein', subcat: 'bein_au', quality: '1080p FHD', lang: 'English', logo: 'bein_au.png', country: 'AU' },
-  { id: 493, name: 'beIN SPORTS Australia 3', category: 'bein', subcat: 'bein_au', quality: '1080p FHD', lang: 'English', logo: 'bein_au.png', country: 'AU' },
-  { id: 62, name: 'beIN SPORTS 1 Turkey', category: 'bein', subcat: 'bein_tr', quality: '1080p FHD', lang: 'Turkish', logo: 'bein_tr.png', country: 'TR' },
-  { id: 63, name: 'beIN SPORTS 2 Turkey', category: 'bein', subcat: 'bein_tr', quality: '1080p FHD', lang: 'Turkish', logo: 'bein_tr.png', country: 'TR' },
-  { id: 64, name: 'beIN SPORTS 3 Turkey', category: 'bein', subcat: 'bein_tr', quality: '1080p FHD', lang: 'Turkish', logo: 'bein_tr.png', country: 'TR' },
-  { id: 67, name: 'beIN SPORTS 4 Turkey', category: 'bein', subcat: 'bein_tr', quality: '1080p FHD', lang: 'Turkish', logo: 'bein_tr.png', country: 'TR' },
-  { id: 134, name: 'Arena Sport 1 Premium', category: 'euro', subcat: 'arena', quality: '1080p FHD', lang: 'Serbian', logo: 'arena.png', country: 'RS' },
-  { id: 135, name: 'Arena Sport 2 Premium', category: 'euro', subcat: 'arena', quality: '1080p FHD', lang: 'Serbian', logo: 'arena.png', country: 'RS' },
-  { id: 139, name: 'Arena Sport 3 Premium', category: 'euro', subcat: 'arena', quality: '1080p FHD', lang: 'Serbian', logo: 'arena.png', country: 'RS' },
-  { id: 429, name: 'Arena Sport 1 Serbia', category: 'euro', subcat: 'arena', quality: '1080p FHD', lang: 'Serbian', logo: 'arena.png', country: 'RS' },
-  { id: 430, name: 'Arena Sport 2 Serbia', category: 'euro', subcat: 'arena', quality: '1080p FHD', lang: 'Serbian', logo: 'arena.png', country: 'RS' },
-  { id: 432, name: 'Arena Sport 1 Croatia', category: 'euro', subcat: 'arena', quality: '1080p FHD', lang: 'Croatian', logo: 'arena.png', country: 'HR' },
-  { id: 123, name: 'Astro SuperSport 1', category: 'euro', subcat: 'astro', quality: '1080p FHD', lang: 'English', logo: 'astro.png', country: 'MY' },
-  { id: 124, name: 'Astro SuperSport 2', category: 'euro', subcat: 'astro', quality: '1080p FHD', lang: 'English', logo: 'astro.png', country: 'MY' }
-];
+
 
 function isExcludedChannelName(rawName: string): boolean {
   return /ssc|alkass|al kass|abu dhabi|ad sport|dubai|israel|5plus|sport\s*[1-5]\s*il|yes\s*sport|one\s*il/i.test(rawName);
@@ -392,97 +340,6 @@ async function fetchDliveSoccerCatalog(): Promise<DliveCatalogData> {
   return result;
 }
 
-const TEAM_TRANSLATION_KEYWORDS: Array<[RegExp, RegExp]> = [
-  [/ليفربول/i, /liverpool/i],
-  [/برايتون/i, /brighton/i],
-  [/مانشستر يونايتد/i, /manchester united/i],
-  [/مانشستر سيتي/i, /manchester city/i],
-  [/بورنموث/i, /bournemouth/i],
-  [/برينتفورد/i, /brentford/i],
-  [/كريستال بالاس/i, /crystal palace/i],
-  [/نيوكاسل/i, /newcastle/i],
-  [/سندرلاند/i, /sunderland/i],
-  [/ليدز/i, /leeds/i],
-  [/أرسنال|آرسنال/i, /arsenal/i],
-  [/تشيلسي/i, /chelsea/i],
-  [/توتنهام/i, /tottenham/i],
-  [/أستون فيلا/i, /aston villa/i],
-  [/برشلونة/i, /barcelona/i],
-  [/ريال مدريد/i, /real madrid/i],
-  [/أتلتيكو مدريد/i, /atletico madrid|atlético/i],
-  [/بلباو/i, /athletic club|bilbao/i],
-  [/خيتافي/i, /getafe/i],
-  [/سيلتا فيجو/i, /celta/i],
-  [/ريال بيتيس/i, /betis/i],
-  [/ريال سوسيداد/i, /real sociedad/i],
-  [/ليفانتي/i, /levante/i],
-  [/إشبيلية/i, /sevilla/i],
-  [/فالنسيا/i, /valencia/i],
-  [/فياريال/i, /villarreal/i],
-  [/بايرن ميونخ|بايرن ميونيخ/i, /bayern/i],
-  [/فرايبورج|فرايبورغ/i, /freiburg/i],
-  [/باير ليفركوزن|ليفركوزن/i, /leverkusen/i],
-  [/هوفنهايم/i, /hoffenheim/i],
-  [/دورتموند/i, /dortmund/i],
-  [/لايبزيج|لايبزيغ/i, /leipzig/i],
-  [/فرانكفورت/i, /frankfurt/i],
-  [/شتوتجارت/i, /stuttgart/i],
-  [/يوفنتوس/i, /juventus/i],
-  [/ليتشي/i, /lecce/i],
-  [/إنتر ميلان|انتر ميلان/i, /internazionale|inter\b/i],
-  [/فيورنتينا/i, /fiorentina/i],
-  [/ميلان/i, /\bmilan\b/i],
-  [/أودينيزي/i, /udinese/i],
-  [/أتالانتا/i, /atalanta/i],
-  [/نابولي/i, /napoli/i],
-  [/روما/i, /\broma\b/i],
-  [/لاتسيو/i, /lazio/i],
-  [/باريس سان جيرمان/i, /psg|paris saint/i],
-  [/ليون/i, /lyon/i],
-  [/مارسيليا/i, /marseille/i],
-  [/موناكو/i, /monaco/i],
-  [/ليل/i, /\blille\b/i],
-  [/بنفيكا/i, /benfica/i],
-  [/بورتو/i, /porto/i]
-];
-
-function matchArabicToDliveEvent(arTeamA: string, arTeamB: string, ykTimeStr: string, dliveEvents: DliveSoccerEvent[]): DliveSoccerEvent | null {
-  const arCombined = `${arTeamA} ${arTeamB}`;
-  const [ykH, ykM] = ykTimeStr.split(':').map(n => parseInt(n || '0', 10));
-  const ykTotalMins = ykH * 60 + ykM;
-
-  let bestEvent: DliveSoccerEvent | null = null;
-  let bestScore = 0;
-
-  for (const ev of dliveEvents) {
-    if (/women|frauen|u17|u19|u21/i.test(ev.competition)) continue;
-    const enCombined = `${ev.teamA} ${ev.teamB}`;
-    let teamMatches = 0;
-
-    for (const [arRx, enRx] of TEAM_TRANSLATION_KEYWORDS) {
-      if (arRx.test(arCombined) && enRx.test(enCombined)) {
-        teamMatches++;
-      }
-    }
-
-    if (teamMatches === 0) continue;
-
-    const [evH, evM] = ev.meccaTime.split(':').map(n => parseInt(n || '0', 10));
-    const evTotalMins = evH * 60 + evM;
-    const timeDiff = Math.abs(ykTotalMins - evTotalMins);
-
-    let score = teamMatches * 10;
-    if (timeDiff <= 60) score += 5;
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestEvent = ev;
-    }
-  }
-
-  return bestScore >= 10 ? bestEvent : null;
-}
-
 const COMPETITION_AR_MAP: Array<[RegExp, string]> = [
   [/england\s*-\s*premier league/i, 'الدوري الإنجليزي الممتاز'],
   [/spain\s*-\s*la\s*liga/i, 'الدوري الإسباني (لا ليغا)'],
@@ -517,45 +374,7 @@ async function getLiveMatchesList(dateKey: 'yesterday' | 'today' | 'tomorrow' = 
       ? 'https://www.yallakora.com/matches-center'
       : `https://www.yallakora.com/matches-center?date=${encodeURIComponent(ykDate)}`;
 
-  const mapBroadcaster = (rawChannel: string | null) => {
-    if (!rawChannel || rawChannel.trim().length === 0) {
-      return { channels: [] as any[], isBeinArabic: false, broadcasterLabel: '', network: 'unbroadcast' as const };
-    }
-    const trimmed = rawChannel.trim();
-    const lower = trimmed.toLowerCase();
-    const beinNumMatch =
-      trimmed.match(/(?:bein\s*sports?|ب[يى]\s*إن\s*سبورت|ب[يى]\s*ان\s*سبورت)\s*(\d+)/i) ||
-      trimmed.match(/(\d+)\s*(?:ب[يى]\s*إن\s*سبورت|ب[يى]\s*ان\s*سبورت)/i);
-    if (beinNumMatch) {
-      const num = parseInt(beinNumMatch[1], 10);
-      const chId = 90 + num;
-      if (chId >= 91 && chId <= 99) {
-        return {
-          channels: [{ channel_id: chId, channel_name: `beIN Sports ${num} HD`, quality: '1080p FHD', isBeinArabic: true }],
-          isBeinArabic: true,
-          broadcasterLabel: `beIN Sports ${num} HD`,
-          network: 'bein_ar' as const
-        };
-      }
-    }
-    if (lower.includes('اكسترا') || lower.includes('إكسترا') || lower.includes('xtra')) {
-      return {
-        channels: [{ channel_id: 100, channel_name: 'beIN SPORTS XTRA 1', quality: '1080p FHD', isBeinArabic: false }],
-        isBeinArabic: false,
-        broadcasterLabel: 'beIN SPORTS XTRA',
-        network: 'bein_ar' as const
-      };
-    }
-    if (lower.includes('news') || lower.includes('إخبار') || lower.includes('اخبار')) {
-      return {
-        channels: [{ channel_id: 578, channel_name: 'beIN Sports News HD', quality: '1080p FHD', isBeinArabic: true }],
-        isBeinArabic: true,
-        broadcasterLabel: 'beIN Sports News HD',
-        network: 'bein_ar' as const
-      };
-    }
-    return { channels: [], isBeinArabic: false, broadcasterLabel: trimmed, network: 'other' as const };
-  };
+  const mapBroadcaster = (rawChannel: string | null) => resolveBroadcaster(rawChannel);
 
   const [ykRes, dliveCatalog] = await Promise.allSettled([
     fetch(ykUrl, {
@@ -618,7 +437,7 @@ async function getLiveMatchesList(dateKey: 'yesterday' | 'today' | 'tomorrow' = 
         const logoBMatch = item.match(/class="teams teamB".*?<img[^>]*src="([^"]+)"/s);
         const logoB = logoBMatch ? logoBMatch[1].replace(/\\/g, '/') : null;
 
-        const matchedDlive = matchArabicToDliveEvent(teamA, teamB, timeStr, dliveEvents);
+        const matchedDlive = findEventForTeams(teamA, teamB, timeStr, dliveEvents, tournament);
         const mergedChannels = [...mapped.channels];
         const seenChIds = new Set(mergedChannels.map(c => c.channel_id));
 
@@ -1430,9 +1249,12 @@ export default {
       const detailsMatch = pathname.match(/^\/api\/match-details\/([^/]+)$/);
       if (detailsMatch) {
         const matchId = decodeURIComponent(detailsMatch[1]);
-        const teamAName = url.searchParams.get('teamA') || 'الفريق الأول';
-        const teamBName = url.searchParams.get('teamB') || 'الفريق الثاني';
-        const competition = url.searchParams.get('competition') || 'بطولة كرة القدم';
+        const teamAName = (url.searchParams.get('teamA') || '').trim();
+        const teamBName = (url.searchParams.get('teamB') || '').trim();
+        if (!teamAName || !teamBName) {
+          return jsonResponse({ success: false, error: 'teamA and teamB are required' }, 400);
+        }
+        const competition = url.searchParams.get('competition') || '';
         const status = (url.searchParams.get('status') || 'FIXTURE') as 'LIVE' | 'FIXTURE' | 'RESULT';
         const scoreARaw = url.searchParams.get('scoreA');
         const scoreBRaw = url.searchParams.get('scoreB');
@@ -1445,11 +1267,11 @@ export default {
           scoreA: scoreARaw !== null && scoreARaw !== '' ? Number(scoreARaw) : null,
           scoreB: scoreBRaw !== null && scoreBRaw !== '' ? Number(scoreBRaw) : null,
           status,
-          time: '21:00',
+          time: '',
           channels: [],
-          isBeinArabic: true,
+          isBeinArabic: false,
           broadcasterLabel: '',
-          network: 'bein_ar'
+          network: 'unbroadcast'
         });
 
         const ykDirect = matchId.match(/^yk_(\d+)$/);
@@ -1490,11 +1312,11 @@ export default {
           if (sqRes.status === 'fulfilled' && sqRes.value.ok) {
             const sqHtml = await sqRes.value.text();
             const formMatches = [...sqHtml.matchAll(/<div class="formName">\s*<span>(.*?)<\/span>/gs)];
-            const formationA = formMatches[0]?.[1]?.trim() || '4-3-3';
-            const formationB = formMatches[1]?.[1]?.trim() || '4-3-3';
+            const formationA = formMatches[0]?.[1]?.trim() || '';
+            const formationB = formMatches[1]?.[1]?.trim() || '';
 
             const parseSquadBlock = (blockHtml: string, isSub: boolean) => {
-              const players: Array<{ number: number; name: string; position: 'GK' | 'DEF' | 'MID' | 'FWD' }> = [];
+              const players: Array<{ number: number; name: string; position: 'GK' | 'DEF' | 'MID' | 'FWD' | '' }> = [];
               const rx = /<div class="playerNum">\s*([0-9]+)\s*<\/div>\s*<p class="playerName">\s*(.*?)\s*<\/p>/gs;
               let m: RegExpExecArray | null;
               let idx = 0;
@@ -1505,7 +1327,7 @@ export default {
                   players.push({
                     number: num,
                     name,
-                    position: idx === 0 ? 'GK' : idx <= 4 ? 'DEF' : idx <= 7 ? 'MID' : 'FWD'
+                    position: ''
                   });
                   idx++;
                 }
@@ -1589,6 +1411,18 @@ export default {
               }
             }
           }
+        }
+
+        const hasSourceData =
+          baseDetails.events.length > 0 ||
+          baseDetails.lineupA.startingXI.length > 0 ||
+          baseDetails.lineupB.startingXI.length > 0 ||
+          baseDetails.stats.length > 0 ||
+          baseDetails.h2h.length > 0 ||
+          Boolean(baseDetails.stadium);
+
+        if (!hasSourceData) {
+          return jsonResponse({ success: false, error: 'NO_SOURCE_DATA', details: baseDetails }, 200, 10);
         }
 
         return jsonResponse({ success: true, details: baseDetails }, 200, 20);

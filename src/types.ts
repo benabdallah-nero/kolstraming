@@ -152,7 +152,7 @@ export interface MatchEventItem {
 export interface MatchLineupPlayer {
   number: number;
   name: string;
-  position: 'GK' | 'DEF' | 'MID' | 'FWD';
+  position: 'GK' | 'DEF' | 'MID' | 'FWD' | '';
   isCaptain?: boolean;
   rating?: string;
 }
