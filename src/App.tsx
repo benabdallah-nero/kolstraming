@@ -12,6 +12,7 @@ import { LeaguesPage } from './pages/LeaguesPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { TermsPage } from './pages/TermsPage';
 import { DmcaPage } from './pages/DmcaPage';
+import { FavoritesPage } from './pages/FavoritesPage';
 
 export default function App() {
   return (
@@ -31,9 +32,10 @@ export default function App() {
               <Route path="/home" element={<HomePage />} />
               <Route path="/watchroom" element={<WatchRoomPage />} />
               <Route path="/watchroom/:channelId" element={<WatchRoomPage />} />
-              <Route path="/schedual" element={<SchedulePage />} />
-              <Route path="/schedule" element={<Navigate to="/schedual" replace />} />
+              <Route path="/schedule" element={<SchedulePage />} />
+              <Route path="/schedual" element={<Navigate to="/schedule" replace />} />
               <Route path="/leagues" element={<LeaguesPage />} />
+              <Route path="/favorites" element={<FavoritesPage />} />
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/dmca" element={<DmcaPage />} />

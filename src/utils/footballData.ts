@@ -8,6 +8,8 @@ import {
   MatchH2HItem,
   LiveMatch
 } from '../types';
+import { getTeamLogoSvg } from './teamLogos.js';
+export { getTeamLogoSvg };
 
 export function getCurrentFootballSeason(): string {
   const now = new Date();
@@ -301,7 +303,7 @@ export function parseEspnStandingsToArabic(
         rank,
         team: {
           name: translateTeamNameAr(rawName),
-          logo
+          logo: logo || getTeamLogoSvg(rawName) || undefined
         },
         played,
         won,
@@ -442,13 +444,13 @@ export function buildMatchDetailsForMatch(match: LiveMatch): MatchDetailsData {
     round: match.competition,
     events: [],
     lineupA: {
-      formation: '4-3-3',
+      formation: '',
       coach: '',
       startingXI: [],
       substitutes: []
     },
     lineupB: {
-      formation: '4-3-3',
+      formation: '',
       coach: '',
       startingXI: [],
       substitutes: []
@@ -914,7 +916,7 @@ export async function fetchMatchDetailsWithFallback(
         const awayRoster = rosters.find((r: any) => r.homeAway === 'away') || rosters[1];
 
         const parseRoster = (rObj: any): MatchLineupTeam => {
-          const formation = rObj?.formation || '4-3-3';
+          const formation = rObj?.formation || '';
           const list = Array.isArray(rObj?.roster) ? rObj.roster : [];
           const startingXI = list
             .filter((p: any) => p.starter)
@@ -935,9 +937,11 @@ export async function fetchMatchDetailsWithFallback(
             }))
             .filter((p: any) => p.name);
 
+          const coach = rObj?.coach?.[0]?.athlete?.displayName || rObj?.coach?.displayName || '';
+
           return {
             formation,
-            coach: 'المدير الفني',
+            coach,
             startingXI: startingXI.map((p: any, idx: number) => ({
               ...p,
               position: p.position || inferPosFromFormation(idx, formation)
@@ -1072,10 +1076,14 @@ export async function fetchMatchesByDateWithFallback(
     // Fall through to client-side Yallakora date scraper
   }
 
-  const targetDate = new Date();
-  if (dateKey === 'yesterday') targetDate.setUTCDate(targetDate.getUTCDate() - 1);
-  else if (dateKey === 'tomorrow') targetDate.setUTCDate(targetDate.getUTCDate() + 1);
-  const ykDate = `${targetDate.getUTCMonth() + 1}/${targetDate.getUTCDate()}/${targetDate.getUTCFullYear()}`;
+  const now = new Date();
+  const meccaNow = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+  if (dateKey === 'yesterday') meccaNow.setUTCDate(meccaNow.getUTCDate() - 1);
+  else if (dateKey === 'tomorrow') meccaNow.setUTCDate(meccaNow.getUTCDate() + 1);
+  const mm = String(meccaNow.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(meccaNow.getUTCDate()).padStart(2, '0');
+  const yyyy = meccaNow.getUTCFullYear();
+  const ykDate = `${mm}/${dd}/${yyyy}`;
   const ykUrl = `https://www.yallakora.com/matches-center?date=${encodeURIComponent(ykDate)}`;
 
   const html = await fetchViaCorsProxy(ykUrl, 6500);
@@ -1142,8 +1150,8 @@ export async function fetchMatchesByDateWithFallback(
       liveList.push({
         id: ykMatchId ? `yk_${ykMatchId}` : `yk_${matchIdx}`,
         competition: tournament,
-        teamA: { name: teamA, logo: logoA },
-        teamB: { name: teamB, logo: logoB },
+        teamA: { name: teamA, logo: logoA || getTeamLogoSvg(teamA) || undefined },
+        teamB: { name: teamB, logo: logoB || getTeamLogoSvg(teamB) || undefined },
         scoreA,
         scoreB,
         status,

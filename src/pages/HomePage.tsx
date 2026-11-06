@@ -14,6 +14,7 @@ import {
   getKickoffCountdown,
   formatBroadcastMinute
 } from '../utils/broadcastFormatters';
+import { TeamBadge } from '../components/TeamBadge';
 
 type ChannelSortOption = 'default' | 'live_first' | 'id_asc' | 'name_asc';
 
@@ -271,17 +272,12 @@ export const HomePage: React.FC = () => {
               <div className="grid grid-cols-12 items-center gap-2 sm:gap-4 md:gap-6">
                 {/* Team A (Home) - 4 cols on mobile, 4.5 cols on sm+ */}
                 <div className="col-span-4 sm:col-span-4 lg:col-span-4 flex flex-col sm:flex-row items-center sm:items-center text-center sm:text-right gap-1.5 sm:gap-3.5 min-w-0">
-                  {activeHeroMatch.teamA.logo ? (
-                    <img
-                      src={activeHeroMatch.teamA.logo}
-                      alt={activeHeroMatch.teamA.name}
-                      className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-strong)] flex items-center justify-center font-display-ar text-sm sm:text-base font-extrabold text-[var(--text-primary)] shrink-0">
-                      {activeHeroMatch.teamA.name.slice(0, 2)}
-                    </div>
-                  )}
+                  <TeamBadge
+                    name={activeHeroMatch.teamA.name}
+                    logo={activeHeroMatch.teamA.logo}
+                    size="lg"
+                    priority
+                  />
                   <div className="min-w-0 w-full sm:flex-1">
                     <div
                       title={activeHeroMatch.teamA.name}
@@ -336,17 +332,12 @@ export const HomePage: React.FC = () => {
                       الفريق الضيف
                     </div>
                   </div>
-                  {activeHeroMatch.teamB.logo ? (
-                    <img
-                      src={activeHeroMatch.teamB.logo}
-                      alt={activeHeroMatch.teamB.name}
-                      className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-strong)] flex items-center justify-center font-display-ar text-sm sm:text-base font-extrabold text-[var(--text-primary)] shrink-0">
-                      {activeHeroMatch.teamB.name.slice(0, 2)}
-                    </div>
-                  )}
+                  <TeamBadge
+                    name={activeHeroMatch.teamB.name}
+                    logo={activeHeroMatch.teamB.logo}
+                    size="lg"
+                    priority
+                  />
                 </div>
               </div>
             </div>
@@ -389,7 +380,7 @@ export const HomePage: React.FC = () => {
 
                 <button
                   type="button"
-                  onClick={() => navigate('/schedual')}
+                  onClick={() => navigate('/schedule')}
                   className="px-4 py-2.5 rounded-xl bg-[var(--bg-canvas)] hover:bg-[var(--bg-elevated)] border border-[var(--border-hairline)] text-[var(--text-primary)] text-xs font-bold transition-all cursor-pointer"
                 >
                   جميع مباريات اليوم ({matches.length})
@@ -453,17 +444,11 @@ export const HomePage: React.FC = () => {
                       <div className="space-y-1">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                            {m.teamA.logo ? (
-                              <img
-                                src={m.teamA.logo}
-                                alt=""
-                                className="w-3.5 h-3.5 object-contain rounded-full shrink-0 bg-[var(--bg-canvas)]"
-                              />
-                            ) : (
-                              <span className="w-3.5 h-3.5 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-hairline)] text-[8px] flex items-center justify-center font-bold text-[var(--text-muted)] shrink-0">
-                                {m.teamA.name.slice(0, 1)}
-                              </span>
-                            )}
+                            <TeamBadge
+                              name={m.teamA.name}
+                              logo={m.teamA.logo}
+                              size="xs"
+                            />
                             <span
                               className="text-xs font-bold text-[var(--text-primary)] truncate"
                               title={m.teamA.name}
@@ -484,17 +469,11 @@ export const HomePage: React.FC = () => {
 
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                            {m.teamB.logo ? (
-                              <img
-                                src={m.teamB.logo}
-                                alt=""
-                                className="w-3.5 h-3.5 object-contain rounded-full shrink-0 bg-[var(--bg-canvas)]"
-                              />
-                            ) : (
-                              <span className="w-3.5 h-3.5 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-hairline)] text-[8px] flex items-center justify-center font-bold text-[var(--text-muted)] shrink-0">
-                                {m.teamB.name.slice(0, 1)}
-                              </span>
-                            )}
+                            <TeamBadge
+                              name={m.teamB.name}
+                              logo={m.teamB.logo}
+                              size="xs"
+                            />
                             <span
                               className="text-xs font-bold text-[var(--text-primary)] truncate"
                               title={m.teamB.name}

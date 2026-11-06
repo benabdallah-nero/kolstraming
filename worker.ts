@@ -61,7 +61,7 @@ function jsonResponse(data: any, status = 200, cacheSec = 60): Response {
   });
 }
 
-const DEFAULT_SECRET = 'kolstream_secure_hmac_secret_2026_9b8a7c6d';
+const DEFAULT_SECRET = 'ks_worker_' + Math.random().toString(36).slice(2);
 
 async function signStreamTokenEdge(
   channelId: string | number,
@@ -96,9 +96,7 @@ async function verifyStreamTokenEdge(
   if (exp > now + 86400) return false;
 
   const expected = await signStreamTokenEdge(channelId, exp, secret);
-  if (token === expected) return true;
-  const universal = await signStreamTokenEdge('*', exp, secret);
-  return token === universal;
+  return token === expected;
 }
 
 function isOriginAllowedEdge(originOrReferer: string | null | undefined, requestHost?: string | null): boolean {
@@ -125,6 +123,39 @@ function isOriginAllowedEdge(originOrReferer: string | null | undefined, request
     return false;
   } catch {
     return false;
+  }
+}
+
+function isDisallowedTargetUrlEdge(targetUrl: string): boolean {
+  try {
+    const parsed = new URL(targetUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return true;
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0' ||
+      hostname === '::1' ||
+      hostname === 'metadata.google.internal' ||
+      hostname.endsWith('.internal') ||
+      hostname.endsWith('.local')
+    ) {
+      return true;
+    }
+    const ipMatch = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+    if (ipMatch) {
+      const b0 = parseInt(ipMatch[1], 10);
+      const b1 = parseInt(ipMatch[2], 10);
+      if (b0 === 10) return true;
+      if (b0 === 127) return true;
+      if (b0 === 169 && b1 === 254) return true;
+      if (b0 === 172 && b1 >= 16 && b1 <= 31) return true;
+      if (b0 === 192 && b1 === 168) return true;
+      if (b0 === 0) return true;
+    }
+    return false;
+  } catch {
+    return true;
   }
 }
 
@@ -1490,8 +1521,8 @@ export default {
           if (sqRes.status === 'fulfilled' && sqRes.value.ok) {
             const sqHtml = await sqRes.value.text();
             const formMatches = [...sqHtml.matchAll(/<div class="formName">\s*<span>(.*?)<\/span>/gs)];
-            const formationA = formMatches[0]?.[1]?.trim() || '4-3-3';
-            const formationB = formMatches[1]?.[1]?.trim() || '4-3-3';
+            const formationA = formMatches[0]?.[1]?.trim() || '';
+            const formationB = formMatches[1]?.[1]?.trim() || '';
 
             const parseSquadBlock = (blockHtml: string, isSub: boolean) => {
               const players: Array<{ number: number; name: string; position: 'GK' | 'DEF' | 'MID' | 'FWD' }> = [];
@@ -1683,7 +1714,7 @@ export default {
           channelName: found ? (found.arabicName || found.name) : `Live Sports Channel #${id}`,
           lang: found?.lang || 'International',
           category: found?.category || 'other',
-          slug: slug || `premium${id}`,
+          slug: slug || null,
           token,
           exp,
           streamUrl: proxyStreamUrl,
@@ -1771,13 +1802,21 @@ export default {
         const chunkUrl = url.searchParams.get('url');
         const mode = url.searchParams.get('mode') || 'dembed';
         const customOrigin = url.searchParams.get('origin') || 'https://tossequip.net';
-        const chunkId = url.searchParams.get('id') || '*';
+        const chunkId = url.searchParams.get('id');
         const token = url.searchParams.get('token');
         const exp = url.searchParams.get('exp');
 
         if (!chunkUrl) return new Response('Missing url', { status: 400, headers: CORS_HEADERS });
 
+        // SSRF protection
+        if (isDisallowedTargetUrlEdge(chunkUrl)) {
+          return new Response('400 Bad Request: Disallowed proxy destination', { status: 400, headers: CORS_HEADERS });
+        }
+
         // Verify chunk token
+        if (!chunkId || chunkId === '*') {
+          return new Response('403 Forbidden: Invalid chunk identifier', { status: 403, headers: CORS_HEADERS });
+        }
         const secret = env.STREAM_AUTH_SECRET || DEFAULT_SECRET;
         const isValid = await verifyStreamTokenEdge(chunkId, exp, token, secret);
         if (!isValid) {

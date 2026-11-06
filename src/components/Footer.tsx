@@ -25,11 +25,14 @@ export const Footer: React.FC = () => {
             <Link to="/home" className="text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors font-semibold">
               الرئيسية والقنوات
             </Link>
-            <Link to="/schedual" className="text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors font-semibold">
+            <Link to="/schedule" className="text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors font-semibold">
               جدول المباريات
             </Link>
             <Link to="/leagues" className="text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors font-semibold">
               ترتيب الدوريات
+            </Link>
+            <Link to="/favorites" className="text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors font-semibold">
+              المفضلة
             </Link>
             <Link to="/watchroom" className="text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors font-semibold">
               غرفة البث

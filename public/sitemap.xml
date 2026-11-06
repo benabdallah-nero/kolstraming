@@ -1,49 +1,64 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <!-- Core Pages -->
+  <!-- Core Broadcast Pages -->
   <url>
-    <loc>/</loc>
+    <loc>https://kolstream.com/</loc>
     <changefreq>hourly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>/schedule</loc>
+    <loc>https://kolstream.com/schedule</loc>
+    <changefreq>always</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://kolstream.com/leagues</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kolstream.com/favorites</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://kolstream.com/watchroom</loc>
     <changefreq>always</changefreq>
     <priority>0.9</priority>
   </url>
 
-  <!-- beIN Sports Premium Channels -->
-  <url><loc>/watchroom/91</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
-  <url><loc>/watchroom/92</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>/watchroom/93</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>/watchroom/94</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>/watchroom/95</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>/watchroom/96</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>/watchroom/97</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>/watchroom/98</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>/watchroom/99</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>/watchroom/578</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>/watchroom/100</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc>/watchroom/101</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc>/watchroom/61</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc>/watchroom/90</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc>/watchroom/116</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc>/watchroom/425</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc>/watchroom/771</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <!-- Verified Core Channels -->
+  <url><loc>https://kolstream.com/watchroom/91</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://kolstream.com/watchroom/92</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kolstream.com/watchroom/93</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kolstream.com/watchroom/94</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kolstream.com/watchroom/95</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kolstream.com/watchroom/96</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kolstream.com/watchroom/97</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kolstream.com/watchroom/98</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kolstream.com/watchroom/99</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kolstream.com/watchroom/578</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kolstream.com/watchroom/100</loc><changefreq>hourly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kolstream.com/watchroom/61</loc><changefreq>hourly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kolstream.com/watchroom/90</loc><changefreq>hourly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kolstream.com/watchroom/116</loc><changefreq>hourly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kolstream.com/watchroom/425</loc><changefreq>hourly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kolstream.com/watchroom/772</loc><changefreq>hourly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kolstream.com/watchroom/773</loc><changefreq>hourly</changefreq><priority>0.7</priority></url>
 
-  <!-- Legal & Generic Policy Pages -->
+  <!-- Legal & Policy Pages -->
   <url>
-    <loc>/privacy</loc>
+    <loc>https://kolstream.com/privacy</loc>
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>/terms</loc>
+    <loc>https://kolstream.com/terms</loc>
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>/dmca</loc>
+    <loc>https://kolstream.com/dmca</loc>
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
   </url>

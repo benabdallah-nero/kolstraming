@@ -11,12 +11,12 @@ import { LiveMatch, MatchDateKey } from '../types';
 import { fetchMatchesByDateWithFallback } from '../utils/footballData';
 import { Pagination } from '../components/Pagination';
 import { MatchDetailsModal } from '../components/MatchDetailsModal';
+import { TeamBadge } from '../components/TeamBadge';
 import { usePageSeo } from '../hooks/usePageSeo';
 import {
   getKickoffCountdown,
   formatBroadcastMinute,
-  isMarqueeMatch,
-  deriveTeamFormByName
+  isMarqueeMatch
 } from '../utils/broadcastFormatters';
 
 export const SchedulePage: React.FC = () => {
@@ -24,7 +24,7 @@ export const SchedulePage: React.FC = () => {
     title: 'جدول المباريات والنتائج المباشرة (الأمس واليوم والغد) – kolstream',
     description:
       'تابع نتائج ومواعيد مباريات الأمس واليوم والغد في الدوريات العربية والأوروبية مع التشكيلات والإحصائيات والقنوات الناقلة على kolstream.',
-    canonicalPath: '/schedual'
+    canonicalPath: '/schedule'
   });
 
   const {
@@ -457,17 +457,12 @@ export const SchedulePage: React.FC = () => {
                 <div className="lg:col-span-8 grid grid-cols-12 items-center gap-2 sm:gap-4 md:gap-5">
                   {/* Team A */}
                   <div className="col-span-4 flex flex-col sm:flex-row items-center sm:items-center text-center sm:text-right gap-1.5 sm:gap-3 min-w-0">
-                    {featuredTopMatch.teamA.logo ? (
-                      <img
-                        src={featuredTopMatch.teamA.logo}
-                        alt={featuredTopMatch.teamA.name}
-                        className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5 shrink-0"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-strong)] flex items-center justify-center font-display-ar text-sm sm:text-base font-extrabold text-[var(--text-primary)] shrink-0">
-                        {featuredTopMatch.teamA.name.slice(0, 2)}
-                      </div>
-                    )}
+                    <TeamBadge
+                      name={featuredTopMatch.teamA.name}
+                      logo={featuredTopMatch.teamA.logo}
+                      size="lg"
+                      priority
+                    />
                     <div className="min-w-0 w-full sm:flex-1">
                       <div
                         title={featuredTopMatch.teamA.name}
@@ -510,17 +505,12 @@ export const SchedulePage: React.FC = () => {
                         الضيف
                       </div>
                     </div>
-                    {featuredTopMatch.teamB.logo ? (
-                      <img
-                        src={featuredTopMatch.teamB.logo}
-                        alt={featuredTopMatch.teamB.name}
-                        className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5 shrink-0"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-strong)] flex items-center justify-center font-display-ar text-sm sm:text-base font-extrabold text-[var(--text-primary)] shrink-0">
-                        {featuredTopMatch.teamB.name.slice(0, 2)}
-                      </div>
-                    )}
+                    <TeamBadge
+                      name={featuredTopMatch.teamB.name}
+                      logo={featuredTopMatch.teamB.logo}
+                      size="lg"
+                      priority
+                    />
                   </div>
                 </div>
 
@@ -629,18 +619,11 @@ export const SchedulePage: React.FC = () => {
                         >
                           {match.teamA.name}
                         </span>
-                        {match.teamA.logo ? (
-                          <img
-                            src={match.teamA.logo}
-                            alt={match.teamA.name}
-                            className="w-7 h-7 sm:w-8 sm:h-8 object-contain rounded-full bg-[var(--bg-canvas)] p-0.5 border border-white/5 shrink-0"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-7 h-7 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-hairline)] flex items-center justify-center text-[10px] font-extrabold text-[var(--text-secondary)] shrink-0">
-                            {match.teamA.name.slice(0, 2)}
-                          </div>
-                        )}
+                        <TeamBadge
+                          name={match.teamA.name}
+                          logo={match.teamA.logo}
+                          size="sm"
+                        />
                       </div>
 
                       {/* Score Box */}
@@ -668,18 +651,11 @@ export const SchedulePage: React.FC = () => {
 
                       {/* Team B */}
                       <div className="col-span-4 flex items-center gap-2.5 min-w-0 text-right">
-                        {match.teamB.logo ? (
-                          <img
-                            src={match.teamB.logo}
-                            alt={match.teamB.name}
-                            className="w-7 h-7 sm:w-8 sm:h-8 object-contain rounded-full bg-[var(--bg-canvas)] p-0.5 border border-white/5 shrink-0"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-7 h-7 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-hairline)] flex items-center justify-center text-[10px] font-extrabold text-[var(--text-secondary)] shrink-0">
-                            {match.teamB.name.slice(0, 2)}
-                          </div>
-                        )}
+                        <TeamBadge
+                          name={match.teamB.name}
+                          logo={match.teamB.logo}
+                          size="sm"
+                        />
                         <span
                           className={`font-bold text-[var(--text-primary)] truncate ${
                             isImportant ? 'font-display-ar text-sm sm:text-base' : 'text-xs sm:text-sm'
@@ -733,7 +709,7 @@ export const SchedulePage: React.FC = () => {
                               ? 'bg-[var(--accent-primary)] border-[var(--accent-primary)] text-[var(--accent-contrast)]'
                               : 'bg-[var(--bg-canvas)] border-[var(--border-hairline)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
                           }`}
-                          title={hasReminder ? 'إلغاء التنبيه' : 'تذكير بالمباراة'}
+                          title={hasReminder ? 'إلغاء المتابعة من قائمتي' : 'متابعة وحفظ المباراة في قائمتي'}
                         >
                           <Bell className="w-3.5 h-3.5" />
                         </button>

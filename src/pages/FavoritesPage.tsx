@@ -54,19 +54,21 @@ export const FavoritesPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200" dir="rtl">
+    <div className="space-y-6" dir="rtl">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-hairline)] rounded-[2px] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-lg font-bold text-stone-100 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
-            <span>قنواتي المفضلة</span>
-            <span className="text-xs font-mono-num font-normal text-stone-400 bg-stone-900 border border-stone-800 px-2 py-0.5 rounded-md">
-              {favorites.length} قنوات
+            <h1 className="font-display-ar text-base sm:text-lg font-extrabold text-[var(--text-primary)]">
+              قنواتي المفضلة
+            </h1>
+            <span className="font-display-num text-xs font-bold text-[var(--accent-primary)] bg-[var(--bg-canvas)] border border-[var(--border-hairline)] px-2 py-0.5 rounded-[2px]">
+              {favorites.length} CHANNELS
             </span>
-          </h1>
-          <p className="text-xs text-stone-400 mt-0.5">
-            قنواتك الرياضية المختارة للوصول السريع أو التشغيل الجماعي في شاشة متعددة
+          </div>
+          <p className="text-xs text-[var(--text-secondary)] mt-1">
+            قنواتك الرياضية المختارة للوصول الفوري أو المشاهدة في وضع الشاشة المتعددة
           </p>
         </div>
 
@@ -76,7 +78,7 @@ export const FavoritesPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleLaunchFavoritesMultiView}
-                className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold text-xs flex items-center gap-1.5 shadow-md transition cursor-pointer"
+                className="px-3.5 py-2 rounded-[2px] bg-[var(--accent-primary)] text-[var(--accent-contrast)] font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer"
               >
                 <Grid className="w-3.5 h-3.5" />
                 <span>تشغيل المفضلة في شاشة متعددة ({Math.min(4, favorites.length)})</span>
@@ -86,9 +88,9 @@ export const FavoritesPage: React.FC = () => {
             <button
               type="button"
               onClick={() => navigate('/home')}
-              className="text-xs text-stone-300 hover:text-white flex items-center gap-1.5 bg-stone-900 border border-stone-800 px-3 py-2 rounded-xl transition cursor-pointer"
+              className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1.5 bg-[var(--bg-canvas)] hover:bg-[var(--bg-elevated)] border border-[var(--border-hairline)] px-3 py-2 rounded-[2px] transition cursor-pointer"
             >
-              <span>استعراض باقي القنوات</span>
+              <span>دليل القنوات الكامل</span>
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -97,22 +99,24 @@ export const FavoritesPage: React.FC = () => {
 
       {/* Empty State when zero favorites */}
       {favorites.length === 0 ? (
-        <div className="py-20 text-center border border-dashed border-stone-800 rounded-3xl p-8 space-y-4 max-w-lg mx-auto">
-          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+        <div className="py-20 text-center border border-[var(--border-hairline)] bg-[var(--bg-surface)] rounded-[2px] p-8 space-y-4 max-w-lg mx-auto">
+          <div className="w-14 h-14 rounded-[2px] bg-[var(--bg-canvas)] border border-amber-400/30 flex items-center justify-center mx-auto text-amber-400">
             <Star className="w-7 h-7" />
           </div>
 
           <div className="space-y-1">
-            <h2 className="text-base font-bold text-stone-100">قائمتك المفضلة فارغة حالياً</h2>
-            <p className="text-xs text-stone-400 max-w-sm mx-auto leading-relaxed">
-              لم تقم بتفضيل أي قناة حتى الآن. يمكنك الضغط على أيقونة النجمة بجوار أي قناة في دليل القنوات لإضافتها هنا والوصول إليها فوراً.
+            <h2 className="font-display-ar text-base font-extrabold text-[var(--text-primary)]">
+              قائمتك المفضلة فارغة حالياً
+            </h2>
+            <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto leading-relaxed">
+              لم تقم بإضافة أي قناة إلى المفضلة. اضغط على أيقونة النجمة بجانب أي قناة في الدليل لإضافتها والوصول إليها بسرعة.
             </p>
           </div>
 
           <button
             type="button"
             onClick={() => navigate('/home')}
-            className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold text-xs inline-flex items-center gap-2 shadow-lg shadow-emerald-950/40 transition active:scale-95"
+            className="px-5 py-2.5 rounded-[2px] bg-[var(--accent-primary)] text-[var(--accent-contrast)] font-extrabold text-xs inline-flex items-center gap-2 transition cursor-pointer"
           >
             <Tv className="w-4 h-4" />
             <span>الانتقال إلى دليل القنوات</span>
@@ -120,19 +124,19 @@ export const FavoritesPage: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+          <div className="border-t border-r border-[var(--border-hairline)] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {paginatedChannels.map(channel => {
               const broadcast = getChannelBroadcast(channel.id);
               return (
                 <div
                   key={channel.id}
                   onClick={() => handleTuneIn(channel.id)}
-                  className="group relative bg-[#121316]/90 hover:bg-[#16181d] border border-stone-800/60 hover:border-amber-500/50 rounded-xl p-3.5 flex flex-col justify-between cursor-pointer transition-all active:scale-[0.99] shadow-sm hover:shadow-md"
+                  className="group bg-[var(--bg-surface)] hover:bg-[var(--bg-row-hover)] border-b border-l border-[var(--border-hairline)] p-3.5 flex flex-col justify-between cursor-pointer transition-colors"
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono-num text-[11px] text-stone-400 bg-stone-900 border border-stone-800/80 px-2 py-0.5 rounded-md">
-                        #{channel.id}
+                      <span className="font-display-num text-xs font-extrabold text-[var(--accent-primary)] bg-[var(--bg-canvas)] border border-[var(--border-hairline)] px-2 py-0.5 rounded-[2px]">
+                        CH {String(channel.id).padStart(2, '0')}
                       </span>
 
                       <button
@@ -141,35 +145,35 @@ export const FavoritesPage: React.FC = () => {
                           e.stopPropagation();
                           toggleFavorite(channel.id);
                         }}
-                        className="p-1.5 rounded-lg text-amber-400 hover:text-stone-400 hover:bg-stone-850 transition"
+                        className="p-1 rounded-[2px] text-amber-400 hover:text-[var(--text-muted)] hover:bg-[var(--bg-canvas)] transition cursor-pointer"
                         title="إزالة من المفضلة"
                         aria-label="إزالة من المفضلة"
                       >
-                        <Star className="w-3.5 h-3.5 fill-current" />
+                        <Star className="w-4 h-4 fill-current" />
                       </button>
                     </div>
 
-                    <h3 className="text-xs font-bold text-stone-100 group-hover:text-emerald-400 transition mt-2 truncate">
+                    <h3 className="font-display-ar text-sm font-bold text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors mt-2.5 truncate">
                       {channel.arabicName || channel.name}
                     </h3>
 
-                    <div className="flex items-center gap-1.5 text-[11px] text-stone-400 mt-1 font-mono-num">
+                    <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] mt-1 font-display-num">
                       <span>{channel.quality || '1080p FHD'}</span>
-                      <span aria-hidden="true" className="opacity-40">·</span>
-                      <span className="font-sans">{channel.lang || 'عربي'}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="font-sans text-[11px]">{channel.lang || 'عربي'}</span>
                     </div>
 
                     {broadcast && (
-                      <div className="mt-2 p-2 rounded-lg bg-stone-900/90 border border-stone-800/70 text-[11px] text-stone-300 flex items-center gap-1.5">
-                        <Radio className="w-3 h-3 text-emerald-400 shrink-0" />
+                      <div className="mt-2.5 p-2 bg-[var(--bg-canvas)] border border-[var(--border-hairline)] text-xs text-[var(--text-secondary)] flex items-center gap-1.5 truncate">
+                        <Radio className="w-3.5 h-3.5 text-[var(--accent-primary)] shrink-0" />
                         <span className="truncate">{broadcast.programTitle}</span>
                       </div>
                     )}
                   </div>
 
-                  <div className="pt-3 mt-3 border-t border-stone-850/60 flex items-center justify-between text-[11px] text-stone-400 group-hover:text-emerald-400 transition">
-                    <span className="flex items-center gap-1">
-                      <Play className="w-3 h-3 fill-current text-emerald-400" />
+                  <div className="pt-3 mt-3 border-t border-[var(--border-hairline)] flex items-center justify-between text-xs text-[var(--text-secondary)] group-hover:text-[var(--accent-primary)] transition-colors">
+                    <span className="flex items-center gap-1.5 font-bold">
+                      <Play className="w-3.5 h-3.5 fill-current text-[var(--accent-primary)]" />
                       <span>تشغيل البث</span>
                     </span>
                     <ChevronLeft className="w-3.5 h-3.5" />

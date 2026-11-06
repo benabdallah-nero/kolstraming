@@ -10,13 +10,14 @@ import {
   translateTeamNameAr,
   buildMatchDetailsForMatch
 } from '../src/utils/footballData.js';
+import { getTeamLogoSvg } from '../src/utils/teamLogos.js';
 
 const app = express();
 
 app.use(express.json());
 
 // Cryptographic Secret for HLS Live Stream Tokens
-const STREAM_AUTH_SECRET = process.env.STREAM_AUTH_SECRET || 'kolstream_secure_hmac_secret_2026_9b8a7c6d';
+const STREAM_AUTH_SECRET = process.env.STREAM_AUTH_SECRET || crypto.randomBytes(32).toString('hex');
 
 export function signStreamToken(channelId: string | number, exp: number): string {
   const data = `stream:${channelId}:${exp}`;
@@ -33,9 +34,7 @@ export function verifyStreamToken(channelId: string | number, expStr: any, token
   if (exp > now + 86400) return false;
 
   const expected = signStreamToken(channelId, exp);
-  if (token === expected) return true;
-  const universal = signStreamToken('*', exp);
-  return token === universal;
+  return token === expected;
 }
 
 export function isOriginAllowed(originOrReferer: string | null | undefined, requestHost?: string | null): boolean {
@@ -62,6 +61,39 @@ export function isOriginAllowed(originOrReferer: string | null | undefined, requ
     return false;
   } catch {
     return false;
+  }
+}
+
+export function isDisallowedTargetUrl(targetUrl: string): boolean {
+  try {
+    const parsed = new URL(targetUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return true;
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0' ||
+      hostname === '::1' ||
+      hostname === 'metadata.google.internal' ||
+      hostname.endsWith('.internal') ||
+      hostname.endsWith('.local')
+    ) {
+      return true;
+    }
+    const ipMatch = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+    if (ipMatch) {
+      const b0 = parseInt(ipMatch[1], 10);
+      const b1 = parseInt(ipMatch[2], 10);
+      if (b0 === 10) return true;
+      if (b0 === 127) return true;
+      if (b0 === 169 && b1 === 254) return true;
+      if (b0 === 172 && b1 >= 16 && b1 <= 31) return true;
+      if (b0 === 192 && b1 === 168) return true;
+      if (b0 === 0) return true;
+    }
+    return false;
+  } catch {
+    return true;
   }
 }
 
@@ -920,8 +952,8 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
           liveList.push({
             id: ykMatchId ? `yk_${ykMatchId}` : `yk_${matchIdx}`,
             competition: tournament,
-            teamA: { name: teamA, logo: logoA },
-            teamB: { name: teamB, logo: logoB },
+            teamA: { name: teamA, logo: logoA || getTeamLogoSvg(teamA) || undefined },
+            teamB: { name: teamB, logo: logoB || getTeamLogoSvg(teamB) || undefined },
             scoreA,
             scoreB,
             status,
@@ -986,12 +1018,44 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
             espnEventLookupMap.set(`${rawHome.toLowerCase()}|${rawAway.toLowerCase()}`, String(ev.id));
           }
 
-          if (liveList.length < 6) {
-            const state = ev?.status?.type?.state;
-            const status: 'LIVE' | 'FIXTURE' | 'RESULT' =
-              state === 'in' ? 'LIVE' : state === 'post' ? 'RESULT' : 'FIXTURE';
-            const scoreA = status !== 'FIXTURE' ? parseInt(home?.score || '0', 10) : null;
-            const scoreB = status !== 'FIXTURE' ? parseInt(away?.score || '0', 10) : null;
+          const state = ev?.status?.type?.state;
+          const status: 'LIVE' | 'FIXTURE' | 'RESULT' =
+            state === 'in' ? 'LIVE' : state === 'post' ? 'RESULT' : 'FIXTURE';
+          const scoreA = status !== 'FIXTURE' ? parseInt(home?.score || '0', 10) : null;
+          const scoreB = status !== 'FIXTURE' ? parseInt(away?.score || '0', 10) : null;
+
+          // Check if already in liveList (from Yallakora or DaddyLive)
+          const existing = liveList.find(m => {
+            const mA = m.teamA.name.toLowerCase();
+            const mB = m.teamB.name.toLowerCase();
+            const tA = teamAName.toLowerCase();
+            const tB = teamBName.toLowerCase();
+            const rH = rawHome.toLowerCase();
+            const rA = rawAway.toLowerCase();
+            return (
+              (mA.includes(tA) || tA.includes(mA) || mA.includes(rH) || rH.includes(mA)) &&
+              (mB.includes(tB) || tB.includes(mB) || mB.includes(rA) || rA.includes(mB))
+            );
+          });
+
+          if (existing) {
+            // Enrich existing match with logos, scores, clock, and status
+            if (!existing.teamA.logo && home?.team?.logo) existing.teamA.logo = home.team.logo;
+            if (!existing.teamB.logo && away?.team?.logo) existing.teamB.logo = away.team.logo;
+            if (existing.scoreA === null && scoreA !== null) existing.scoreA = scoreA;
+            if (existing.scoreB === null && scoreB !== null) existing.scoreB = scoreB;
+            if (status === 'LIVE') {
+              existing.status = 'LIVE';
+              if (ev?.status?.displayClock) existing.minute = ev.status.displayClock;
+            } else if (status === 'RESULT' && existing.status === 'FIXTURE') {
+              existing.status = 'RESULT';
+              existing.statusText = 'انتهت';
+            }
+          } else if (liveList.length < 80) {
+            // Match with DaddyLive events to find playable broadcast channels
+            const matchedDlive = matchArabicToDliveEvent(teamAName, teamBName, '', dliveEvents);
+            const evChannels = matchedDlive ? [...matchedDlive.channels] : [];
+            const hasBeinAr = evChannels.some(c => c.isBeinArabic);
 
             const evDate = ev?.date ? new Date(ev.date) : new Date();
             const meccaH = (evDate.getUTCHours() + 3) % 24;
@@ -999,15 +1063,13 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
             const timeStr = `${String(meccaH).padStart(2, '0')}:${meccaM}`;
 
             const leagueName = translateCompetition(ev?.league?.name || compObj?.league?.name || 'بطولة كرة قدم عالمية');
-            const chNum = (matchIdx % 4) + 1;
-            const chId = 90 + chNum;
 
             matchIdx++;
             liveList.push({
               id: `espn_${ev.id || matchIdx}`,
               competition: leagueName,
-              teamA: { name: teamAName, logo: home?.team?.logo },
-              teamB: { name: teamBName, logo: away?.team?.logo },
+              teamA: { name: teamAName, logo: home?.team?.logo || getTeamLogoSvg(teamAName) || undefined },
+              teamB: { name: teamBName, logo: away?.team?.logo || getTeamLogoSvg(teamBName) || undefined },
               scoreA,
               scoreB,
               status,
@@ -1015,10 +1077,10 @@ app.get('/api/live-matches', async (req: Request, res: Response) => {
               minute: status === 'LIVE' ? (ev?.status?.displayClock || 'مباشر') : null,
               time: `${timeStr} بتوقيت مكة`,
               localTime: `${timeStr} بتوقيت مكة`,
-              channels: [{ channel_id: chId, channel_name: `beIN Sports ${chNum} HD`, quality: '1080p FHD', isBeinArabic: true }],
-              isBeinArabic: true,
-              broadcasterLabel: `beIN Sports ${chNum} HD`,
-              network: 'bein_ar'
+              channels: evChannels.slice(0, 6),
+              isBeinArabic: hasBeinAr,
+              broadcasterLabel: evChannels.length > 0 ? evChannels.slice(0, 3).map(c => c.channel_name).join(' / ') : 'غير منقولة تلفزيونياً',
+              network: hasBeinAr ? 'bein_ar' : evChannels.length > 0 ? 'other' : 'unbroadcast'
             });
           }
         }
@@ -1254,8 +1316,8 @@ async function fetchYallakoraRealMatchDetails(ykId: string, ykPath?: string) {
     })
   ]);
 
-  let formationA = '4-3-3';
-  let formationB = '4-3-3';
+  let formationA = '';
+  let formationB = '';
   let startingA: Array<{ number: number; name: string; position: 'GK' | 'DEF' | 'MID' | 'FWD' }> = [];
   let startingB: Array<{ number: number; name: string; position: 'GK' | 'DEF' | 'MID' | 'FWD' }> = [];
   let subsA: Array<{ number: number; name: string; position: 'GK' | 'DEF' | 'MID' | 'FWD' }> = [];
@@ -1615,8 +1677,8 @@ async function fetchYallakoraRealMatchDetails(ykId: string, ykPath?: string) {
   }
 
   return {
-    lineupA: { formation: formationA, coach: 'المدير الفني', startingXI: startingA, substitutes: subsA },
-    lineupB: { formation: formationB, coach: 'المدير الفني', startingXI: startingB, substitutes: subsB },
+    lineupA: { formation: formationA, coach: '', startingXI: startingA, substitutes: subsA },
+    lineupB: { formation: formationB, coach: '', startingXI: startingB, substitutes: subsB },
     events,
     stats,
     h2h
@@ -1640,7 +1702,7 @@ async function fetchEspnRealMatchDetails(espnEventId: string) {
     const awayRoster = rosters.find((r: any) => r.homeAway === 'away') || rosters[1];
 
     const parseEspnRoster = (rObj: any) => {
-      const formation = rObj?.formation || '4-3-3';
+      const formation = rObj?.formation || '';
       const list = Array.isArray(rObj?.roster) ? rObj.roster : [];
       const startingXI = list
         .filter((p: any) => p.starter)
@@ -1661,7 +1723,8 @@ async function fetchEspnRealMatchDetails(espnEventId: string) {
         }))
         .filter((p: any) => p.name);
 
-      return { formation, coach: 'المدير الفني', startingXI, substitutes };
+      const coach = rObj?.coach?.[0]?.athlete?.displayName || rObj?.coach?.displayName || '';
+      return { formation, coach, startingXI, substitutes };
     };
 
     const homeTeamName = homeRoster?.team?.displayName || '';
@@ -1871,7 +1934,10 @@ app.get('/api/epg/live', async (req: Request, res: Response) => {
       return res.json({ success: true, epg: cachedEpg });
     }
 
-    const matchesRes = getCached<any[]>('live_matches_realtime_v2', 60 * 1000) || [];
+    const matchesRes =
+      getCached<any[]>('live_matches_realtime_v5_today', 120 * 1000) ||
+      getCached<any[]>('live_matches_realtime_v2', 60 * 1000) ||
+      [];
     const soccerCatalog = await fetchDliveSoccerCatalog();
     const epgMap: Record<number, any> = {};
 
@@ -2013,16 +2079,10 @@ interface DembedConfig {
   channel: string;
 }
 
-async function getDembedConfig(channelId: string | number): Promise<DembedConfig> {
+async function getDembedConfig(channelId: string | number): Promise<DembedConfig | null> {
   const strId = String(channelId);
   const cached = getCached<DembedConfig>(`dembed_cfg_${strId}`, 10 * 60 * 1000);
   if (cached) return cached;
-
-  const fallbackCfg: DembedConfig = {
-    src: `https://edge.wedd48c.top/premium${strId}/index.m3u8`,
-    edge: 'https://edge.wedd48c.top',
-    channel: `premium${strId}`
-  };
 
   try {
     const dembedRes = await fetch(`https://dembed.st/premiumtv/daddy.php?id=${strId}`, {
@@ -2045,14 +2105,15 @@ async function getDembedConfig(channelId: string | number): Promise<DembedConfig
       }
     }
   } catch {
-    // Use default pattern
+    // Upstream stream currently offline
   }
 
-  return fallbackCfg;
+  return null;
 }
 
 async function getDembedAuthedM3u8Url(channelId: string | number, forceRefresh = false): Promise<string | null> {
   const cfg = await getDembedConfig(channelId);
+  if (!cfg) return null;
   const tokenKey = `dembed_tok_${cfg.channel}`;
   // Cache token for 22s (well below upstream expiry) so playlists never hit 403 mid-stream
   let token = forceRefresh ? null : getCached<string>(tokenKey, 22 * 1000);
@@ -2357,7 +2418,7 @@ app.get('/api/resolve-m3u8/:id', async (req: Request, res: Response) => {
       channelName: channelMeta.name,
       lang: channelMeta.lang,
       category: channelMeta.category,
-      slug: slug || `premium${id}`,
+      slug: slug || null,
       token,
       exp,
       streamUrl: proxyStreamUrl,
@@ -3078,14 +3139,19 @@ app.get('/api/proxy-chunk', async (req: Request, res: Response) => {
   const url = req.query.url as string;
   const mode = (req.query.mode as string) || 'dembed';
   const customOrigin = (req.query.origin as string) || 'https://tossequip.net';
-  const chunkId = (req.query.id as string) || '*';
+  const chunkId = req.query.id as string | undefined;
   const token = req.query.token as string | undefined;
   const exp = req.query.exp as string | undefined;
 
   if (!url) return res.status(400).send('Missing url');
 
-  // Verify chunk token
-  if (!verifyStreamToken(chunkId, exp, token)) {
+  // SSRF Protection: Disallow loopback, private ranges, and internal metadata
+  if (isDisallowedTargetUrl(url)) {
+    return res.status(400).send('400 Bad Request: Disallowed proxy destination');
+  }
+
+  // Verify chunk token: Require strict HMAC matching specific channel ID
+  if (!chunkId || chunkId === '*' || !verifyStreamToken(chunkId, exp, token)) {
     return res.status(403).send('403 Forbidden: Invalid or expired chunk token');
   }
 

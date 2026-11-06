@@ -11,11 +11,9 @@ import {
   fetchStandingsWithFallback
 } from '../utils/footballData';
 import { MatchDetailsModal } from '../components/MatchDetailsModal';
+import { TeamBadge } from '../components/TeamBadge';
 import { usePageSeo } from '../hooks/usePageSeo';
-import {
-  deriveStandingForm,
-  formatBroadcastMinute
-} from '../utils/broadcastFormatters';
+import { formatBroadcastMinute } from '../utils/broadcastFormatters';
 
 export const LeaguesPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -131,7 +129,7 @@ export const LeaguesPage: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => navigate('/schedual')}
+            onClick={() => navigate('/schedule')}
             className="px-4 py-2 rounded-xl bg-[var(--bg-canvas)] hover:bg-[var(--bg-elevated)] border border-[var(--border-hairline)] text-[var(--text-primary)] text-xs font-bold transition-all shadow-sm cursor-pointer self-start sm:self-auto"
           >
             جدول مباريات اليوم ←
@@ -230,8 +228,6 @@ export const LeaguesPage: React.FC = () => {
                         ? 'border-r-[3px] border-r-[var(--signal-live)]'
                         : 'border-r-[3px] border-r-transparent';
 
-                    const formSquares = deriveStandingForm(row);
-
                     return (
                       <tr
                         key={`${row.rank}_${row.team.name}`}
@@ -242,18 +238,11 @@ export const LeaguesPage: React.FC = () => {
                         </td>
                         <td className="py-2.5 px-3 border-l border-[var(--border-hairline)]">
                           <div className="flex items-center gap-2.5 min-w-[140px]">
-                            {row.team.logo ? (
-                              <img
-                                src={row.team.logo}
-                                alt={row.team.name}
-                                className="w-5 h-5 object-contain shrink-0"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="w-5 h-5 bg-[var(--bg-canvas)] border border-[var(--border-hairline)] flex items-center justify-center text-[9px] font-extrabold text-[var(--text-secondary)] shrink-0">
-                                {row.team.name.slice(0, 2)}
-                              </div>
-                            )}
+                            <TeamBadge
+                              name={row.team.name}
+                              logo={row.team.logo}
+                              size="sm"
+                            />
                             <span className="font-bold text-[var(--text-primary)] truncate">
                               {row.team.name}
                             </span>
@@ -286,22 +275,26 @@ export const LeaguesPage: React.FC = () => {
                           {row.goalDiff > 0 ? `+${row.goalDiff}` : row.goalDiff}
                         </td>
                         <td className="py-2.5 px-2.5 text-center border-l border-[var(--border-hairline)] hidden md:table-cell">
-                          <div className="inline-flex items-center gap-1">
-                            {formSquares.map((res, idx) => (
-                              <span
-                                key={idx}
-                                className={`w-4 h-4 rounded-[2px] font-display-num text-[10px] font-extrabold inline-flex items-center justify-center leading-none ${
-                                  res === 'W'
-                                    ? 'bg-[var(--accent-primary)] text-[var(--accent-contrast)]'
-                                    : res === 'D'
-                                    ? 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border-strong)]'
-                                    : 'bg-[#2a1215] text-[var(--signal-live)] border border-[var(--signal-live)]/40'
-                                }`}
-                              >
-                                {res}
-                              </span>
-                            ))}
-                          </div>
+                          {Array.isArray(row.form) && row.form.length > 0 ? (
+                            <div className="inline-flex items-center gap-1">
+                              {row.form.map((res, idx) => (
+                                <span
+                                  key={idx}
+                                  className={`w-4 h-4 rounded-[2px] font-display-num text-[10px] font-extrabold inline-flex items-center justify-center leading-none ${
+                                    res === 'W'
+                                      ? 'bg-[var(--accent-primary)] text-[var(--accent-contrast)]'
+                                      : res === 'D'
+                                      ? 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border-strong)]'
+                                      : 'bg-[#2a1215] text-[var(--signal-live)] border border-[var(--signal-live)]/40'
+                                  }`}
+                                >
+                                  {res}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-[var(--text-muted)] font-display-num text-xs">—</span>
+                          )}
                         </td>
                         <td className="py-2.5 px-3 text-center font-display-num font-extrabold text-lg text-[var(--text-primary)] bg-[var(--bg-canvas)]">
                           {row.points}
@@ -349,7 +342,7 @@ export const LeaguesPage: React.FC = () => {
             </h2>
             <button
               type="button"
-              onClick={() => navigate('/schedual')}
+              onClick={() => navigate('/schedule')}
               className="text-xs text-[var(--accent-primary)] font-bold hover:underline cursor-pointer"
             >
               كل الجدول ←

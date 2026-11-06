@@ -27,7 +27,7 @@ export const BottomDock: React.FC = () => {
       </NavLink>
 
       <NavLink
-        to="/schedual"
+        to="/schedule"
         className={({ isActive }) =>
           `flex flex-col items-center justify-center border-l border-[var(--border-hairline)] border-t-[3px] transition-colors relative ${
             isActive

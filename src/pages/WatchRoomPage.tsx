@@ -346,7 +346,7 @@ export const WatchRoomPage: React.FC = () => {
     canonicalPath: currentChannel ? `/watchroom/${currentChannel.id}` : '/watchroom'
   });
 
-  const [playerMode, setPlayerMode] = useState<'server1' | 'server2' | 'server3' | 'direct'>('server1');
+  const [playerMode, setPlayerMode] = useState<'server1' | 'server2' | 'server3'>('server1');
   const [playerStatus, setPlayerStatus] = useState<'loading' | 'playing' | 'error'>('loading');
   const [retryKey, setRetryKey] = useState<number>(0);
   const [selectedQuality, setSelectedQuality] = useState<QualityResolution>('auto');
@@ -363,7 +363,6 @@ export const WatchRoomPage: React.FC = () => {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const showToast = useCallback((msg: string) => {
@@ -468,9 +467,6 @@ export const WatchRoomPage: React.FC = () => {
       videoRef.current.volume = targetVol;
       videoRef.current.play().catch(() => {});
     }
-    if (iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.postMessage({ type: 'SET_MUTE', muted: false }, '*');
-    }
   }, [volume]);
 
   const handleToggleMute = useCallback(() => {
@@ -481,9 +477,6 @@ export const WatchRoomPage: React.FC = () => {
     setIsMuted(true);
     if (videoRef.current) {
       videoRef.current.muted = true;
-    }
-    if (iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.postMessage({ type: 'SET_MUTE', muted: true }, '*');
     }
   }, [isMuted, handleForceUnmute]);
 
@@ -532,13 +525,10 @@ export const WatchRoomPage: React.FC = () => {
       return;
     }
 
-    if (!currentChannel || playerMode === 'direct') {
+    if (!currentChannel) {
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
-      }
-      if (playerMode === 'direct') {
-        setPlayerStatus('playing');
       }
       return;
     }
@@ -754,8 +744,7 @@ export const WatchRoomPage: React.FC = () => {
             {([
               { id: 'server1', code: 'FEED 01', label: 'المصدر الرئيسي' },
               { id: 'server2', code: 'FEED 02', label: 'المصدر البديل' },
-              { id: 'server3', code: 'FEED 03', label: 'سيرفر احتياطي' },
-              { id: 'direct', code: 'FEED 04', label: 'البث المدمج' }
+              { id: 'server3', code: 'FEED 03', label: 'سيرفر احتياطي' }
             ] as const).map(srv => {
               const active = playerMode === srv.id;
               return (
@@ -764,7 +753,6 @@ export const WatchRoomPage: React.FC = () => {
                   type="button"
                   onClick={() => {
                     setPlayerMode(srv.id);
-                    if (srv.id === 'direct') setPlayerStatus('playing');
                     showToast(`تم التحويل إلى ${srv.label}`);
                   }}
                   className={`px-4 py-2.5 border-r border-[var(--border-hairline)] border-b-[3px] text-right transition-colors cursor-pointer flex flex-col justify-center ${
@@ -825,33 +813,22 @@ export const WatchRoomPage: React.FC = () => {
             isTheaterMode ? 'aspect-[16/9] sm:aspect-[21/9] max-h-[78vh]' : 'aspect-video'
           }`}
         >
-          {playerMode === 'direct' ? (
-            <iframe
-              ref={iframeRef}
-              src={`https://dembed.st/embed/stream-${currentChannel.id}.php`}
-              className="w-full h-full border-0 bg-black"
-              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-              allowFullScreen
-              title={currentChannel.name}
-            />
-          ) : (
-            <video
-              ref={videoRef}
-              controls
-              autoPlay
-              playsInline
-              onVolumeChange={e => {
-                const v = e.currentTarget;
-                setIsMuted(v.muted || v.volume === 0);
-                setVolume(v.volume);
-              }}
-              className="w-full h-full bg-black object-contain"
-              onPlaying={() => setPlayerStatus('playing')}
-              onCanPlay={() => setPlayerStatus('playing')}
-            />
-          )}
+          <video
+            ref={videoRef}
+            controls
+            autoPlay
+            playsInline
+            onVolumeChange={e => {
+              const v = e.currentTarget;
+              setIsMuted(v.muted || v.volume === 0);
+              setVolume(v.volume);
+            }}
+            className="w-full h-full bg-black object-contain"
+            onPlaying={() => setPlayerStatus('playing')}
+            onCanPlay={() => setPlayerStatus('playing')}
+          />
 
-          {isMuted && playerMode !== 'direct' && (
+          {isMuted && (
             <button
               type="button"
               onClick={e => {
@@ -865,7 +842,7 @@ export const WatchRoomPage: React.FC = () => {
             </button>
           )}
 
-          {playerStatus === 'error' && playerMode !== 'direct' && (
+          {playerStatus === 'error' && (
             <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-4 text-center z-20 space-y-3">
               <div className="font-display-num text-2xl font-extrabold text-[var(--signal-live)]">
                 SIGNAL INTERRUPTED
@@ -885,9 +862,8 @@ export const WatchRoomPage: React.FC = () => {
                         ? 'server2'
                         : playerMode === 'server2'
                         ? 'server3'
-                        : 'direct';
+                        : 'server1';
                     setPlayerMode(next);
-                    if (next === 'direct') setPlayerStatus('playing');
                   }}
                   className="px-4 py-2 rounded-[2px] bg-[var(--accent-primary)] text-[var(--accent-contrast)] font-extrabold text-xs transition cursor-pointer"
                 >
@@ -904,7 +880,7 @@ export const WatchRoomPage: React.FC = () => {
             </div>
           )}
 
-          {playerStatus === 'loading' && playerMode !== 'direct' && (
+          {playerStatus === 'loading' && (
             <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center text-[var(--text-primary)] gap-2 z-10 pointer-events-none">
               <RotateCw className="w-6 h-6 animate-spin text-[var(--accent-primary)]" />
               <span className="text-xs font-bold">جاري استقبال إشارة البث المباشر...</span>
@@ -935,7 +911,7 @@ export const WatchRoomPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
-          {!isMultiViewMode && hasMultipleLevels && playerMode !== 'direct' && (
+          {!isMultiViewMode && hasMultipleLevels && (
             <div className="flex items-center bg-[var(--bg-canvas)] border border-[var(--border-hairline)] rounded-[2px]">
               {QUALITY_OPTIONS.map(opt => (
                 <button
@@ -1041,7 +1017,7 @@ export const WatchRoomPage: React.FC = () => {
           <div className="flex items-center gap-4 text-xs">
             <button
               type="button"
-              onClick={() => navigate('/schedual')}
+              onClick={() => navigate('/schedule')}
               className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-semibold transition-colors cursor-pointer"
             >
               جدول المباريات

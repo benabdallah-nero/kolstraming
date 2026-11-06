@@ -8,6 +8,7 @@ export const Navbar: React.FC = () => {
   const {
     channels,
     matches,
+    favorites,
     watchHistory,
     isCommandPaletteOpen,
     setCommandPaletteOpen,
@@ -118,7 +119,7 @@ export const Navbar: React.FC = () => {
               </NavLink>
 
               <NavLink
-                to="/schedual"
+                to="/schedule"
                 className={({ isActive }) =>
                   `h-full px-5 flex items-center gap-2 text-xs font-bold border-l border-[var(--border-hairline)] border-b-[3px] transition-colors whitespace-nowrap ${
                     isActive
@@ -147,6 +148,24 @@ export const Navbar: React.FC = () => {
                 }
               >
                 <span className="font-display-ar text-sm font-bold">ترتيب الدوريات</span>
+              </NavLink>
+
+              <NavLink
+                to="/favorites"
+                className={({ isActive }) =>
+                  `h-full px-5 flex items-center gap-2 text-xs font-bold border-l border-[var(--border-hairline)] border-b-[3px] transition-colors whitespace-nowrap ${
+                    isActive
+                      ? 'border-b-[var(--accent-primary)] bg-[var(--bg-elevated)] text-[var(--accent-primary)]'
+                      : 'border-b-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]/50'
+                  }`
+                }
+              >
+                <span className="font-display-ar text-sm font-bold">المفضلة</span>
+                {favorites.length > 0 && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-[2px] bg-amber-500/20 text-amber-400 border border-amber-500/30 font-display-num text-xs font-extrabold leading-none">
+                    {favorites.length}
+                  </span>
+                )}
               </NavLink>
 
               <NavLink

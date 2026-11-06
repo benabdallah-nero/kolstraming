@@ -13,6 +13,7 @@ import {
   formatBroadcastMinute,
   getKickoffCountdown
 } from '../utils/broadcastFormatters';
+import { TeamBadge } from './TeamBadge';
 
 interface MatchDetailsModalProps {
   match: LiveMatch | null;
@@ -120,17 +121,12 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
           <div className="p-5 sm:p-7 grid grid-cols-11 items-center gap-3 sm:gap-4">
             {/* Team A (4 cols) */}
             <div className="col-span-4 flex flex-col items-center text-center gap-2 min-w-0">
-              {match.teamA.logo ? (
-                <img
-                  src={match.teamA.logo}
-                  alt={match.teamA.name}
-                  className="w-12 h-12 sm:w-16 sm:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5"
-                />
-              ) : (
-                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-strong)] flex items-center justify-center font-display-ar text-base font-extrabold text-[var(--text-primary)]">
-                  {match.teamA.name.slice(0, 2)}
-                </div>
-              )}
+              <TeamBadge
+                name={match.teamA.name}
+                logo={match.teamA.logo}
+                size="lg"
+                priority
+              />
               <span
                 className="font-display-ar text-sm sm:text-base font-extrabold text-[var(--text-primary)] truncate max-w-full"
                 title={match.teamA.name}
@@ -172,17 +168,12 @@ export const MatchDetailsModal: React.FC<MatchDetailsModalProps> = ({
 
             {/* Team B (4 cols) */}
             <div className="col-span-4 flex flex-col items-center text-center gap-2 min-w-0">
-              {match.teamB.logo ? (
-                <img
-                  src={match.teamB.logo}
-                  alt={match.teamB.name}
-                  className="w-12 h-12 sm:w-16 sm:h-16 object-contain rounded-full bg-[var(--bg-canvas)] p-1 border border-white/5"
-                />
-              ) : (
-                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-[var(--bg-canvas)] border border-[var(--border-strong)] flex items-center justify-center font-display-ar text-base font-extrabold text-[var(--text-primary)]">
-                  {match.teamB.name.slice(0, 2)}
-                </div>
-              )}
+              <TeamBadge
+                name={match.teamB.name}
+                logo={match.teamB.logo}
+                size="lg"
+                priority
+              />
               <span
                 className="font-display-ar text-xs sm:text-base font-extrabold text-[var(--text-primary)] truncate max-w-full"
                 title={match.teamB.name}

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Channel, LiveMatch, BroadcastInfo } from '../types';
+import { getTeamLogoSvg } from '../utils/teamLogos';
 
 export type ThemeId = 'stadium' | 'champions' | 'royal' | 'arena' | 'daylight';
 
@@ -592,8 +593,8 @@ async function scrapeRealMatchesClientSide(): Promise<{ matches: LiveMatch[]; di
         liveList.push({
           id: ykMatchId ? `yk_${ykMatchId}` : `yk_${matchIdx}`,
           competition: tournament,
-          teamA: { name: teamA, logo: logoA },
-          teamB: { name: teamB, logo: logoB },
+          teamA: { name: teamA, logo: logoA || getTeamLogoSvg(teamA) || undefined },
+          teamB: { name: teamB, logo: logoB || getTeamLogoSvg(teamB) || undefined },
           scoreA,
           scoreB,
           status,
