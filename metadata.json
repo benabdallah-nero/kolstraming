@@ -1,0 +1,6 @@
+{
+  "name": "kolstream",
+  "description": "kolstream – بث مباشر للمباريات ودليل القنوات الرياضية 24/7. منصة متطورة للبث الحي لقنوات beIN Sports وخيارات منع التقطيع وموازنة البث المباشر.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

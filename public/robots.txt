@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Allow: /schedule
+Allow: /watchroom/
+Allow: /privacy
+Allow: /terms
+Allow: /dmca
+
+Sitemap: /sitemap.xml

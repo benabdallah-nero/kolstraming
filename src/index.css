@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+/*
+ * KOLSTREAM BROADCAST GRAPHICS PACKAGE SPECIFICATION
+ * 1. Concept: Live television football scoreboard & matchday programme with tight 1px hairline grids and hard edges (<= 4px radius).
+ * 2. Palette: Pitch-tinted dark slate canvas (#0c100e / #121815), sharp pitch-lime accent (#c8f526), and signal red (#ef233c) strictly for LIVE.
+ * 3. Typography: Barlow Condensed (tabular numerals) for oversized scores/times, Changa for Arabic display headers, and IBM Plex Sans Arabic for dense body data.
+ * 4. Layout: Asymmetric oversized featured match scoreboard paired with varied-height 1px hairline fixture and channel switching rows.
+ * 5. Details: Pulsing signal-red LIVE dot with tabular match minute, W/D/L team form squares, real-time kickoff countdowns, and sports-desk Arabic microcopy.
+ */
+
+:root {
+  --bg-canvas: #090e0b;
+  --bg-surface: #0f1713;
+  --bg-elevated: #15201a;
+  --bg-row-hover: #1b2922;
+  --border-hairline: #1d2c23;
+  --border-strong: #2a3d31;
+  --text-primary: #f0f5f1;
+  --text-secondary: #9cb1a4;
+  --text-muted: #647a6d;
+  --accent-primary: #22c55e;
+  --accent-contrast: #041208;
+  --signal-live: #f43f5e;
+  --font-display-num: 'Barlow Condensed', sans-serif;
+  --font-display-ar: 'Changa', 'IBM Plex Sans Arabic', sans-serif;
+  --font-sans: 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+html[data-theme="daylight"] {
+  --bg-canvas: #f6f8f6;
+  --bg-surface: #ffffff;
+  --bg-elevated: #edf2ee;
+  --bg-row-hover: #e3ebe4;
+  --border-hairline: #dbe4dc;
+  --border-strong: #bacbbb;
+  --text-primary: #0f1a13;
+  --text-secondary: #485c50;
+  --text-muted: #728779;
+  --accent-primary: #16a34a;
+  --accent-contrast: #ffffff;
+  --signal-live: #e11d48;
+}
+
+body {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display-num,
+.font-mono-num {
+  font-family: var(--font-display-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.font-display-ar {
+  font-family: var(--font-display-ar);
+  letter-spacing: -0.01em;
+}
+
+.theme-canvas {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+}
+
+.theme-surface {
+  background-color: var(--bg-surface);
+  border-color: var(--border-hairline);
+  color: var(--text-primary);
+}
+
+.theme-elevated {
+  background-color: var(--bg-elevated);
+  border-color: var(--border-hairline);
+}
+
+.broadcast-panel {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: 12px;
+}
+
+.broadcast-row {
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-hairline);
+  transition: all 140ms ease;
+}
+
+.broadcast-row:hover {
+  background-color: var(--bg-row-hover);
+}
+
+@keyframes livePulseDot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.88);
+  }
+}
+
+.live-dot-pulse {
+  background-color: var(--signal-live);
+  animation: livePulseDot 1.4s ease-in-out infinite;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

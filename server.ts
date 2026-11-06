@@ -1,0 +1,57 @@
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import app from './api/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const PORT = 3000;
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Mount Vite or serve static files
+async function startServer() {
+  // Explicit SEO and Service Worker routes before Vite SPA fallback
+  app.get('/favicon.svg', (_req, res) => {
+    res.type('image/svg+xml').sendFile(path.resolve(__dirname, 'public', 'favicon.svg'));
+  });
+  app.get('/ucl-starball.svg', (_req, res) => {
+    res.type('image/svg+xml').sendFile(path.resolve(__dirname, 'public', 'ucl-starball.svg'));
+  });
+  app.get('/sw.js', (_req, res) => {
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.type('application/javascript').sendFile(path.resolve(__dirname, 'public', 'sw.js'));
+  });
+  app.get('/robots.txt', (_req, res) => {
+    res.type('text/plain').sendFile(path.resolve(__dirname, 'public', 'robots.txt'));
+  });
+  app.get('/sitemap.xml', (_req, res) => {
+    res.type('application/xml').sendFile(path.resolve(__dirname, 'public', 'sitemap.xml'));
+  });
+
+  if (!isProduction) {
+    const { createServer } = await import('vite');
+    const vite = await createServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    app.use(express.static(path.resolve(__dirname, 'dist')));
+    app.get('*', (req, res) => {
+      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+    });
+  }
+
+  if (!process.env.VERCEL && !process.env.NOW_REGION) {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[DLHD Server] Running on http://localhost:${PORT}`);
+    });
+  }
+}
+
+if (!process.env.VERCEL && !process.env.NOW_REGION) {
+  startServer();
+}
+
+export default app;
