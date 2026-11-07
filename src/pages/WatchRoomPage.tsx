@@ -776,7 +776,7 @@ export const WatchRoomPage: React.FC = () => {
       {isMultiViewMode ? (
         <div
           ref={containerRef}
-          className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-[var(--bg-surface)] p-3 rounded-[2px] border border-[var(--border-hairline)]"
+          className="grid grid-cols-2 gap-2 bg-[var(--bg-surface)] p-2 rounded-[2px] border border-[var(--border-hairline)]"
         >
           {activeMultiChannels.map((ch, idx) => (
             <MultiViewCellPlayer

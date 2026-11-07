@@ -33,10 +33,10 @@ export const TeamBadge: React.FC<TeamBadgeProps> = ({
   priority = false
 }) => {
   const [imgError, setImgError] = useState(false);
-  const svgFallback = getTeamLogoSvg(name);
+  const vectorLogo = getTeamLogoSvg(name);
 
-  // Use primary logo if provided and hasn't errored; otherwise use our authentic SVG vector badge
-  const activeSrc = !imgError && logo ? logo : svgFallback;
+  // Prioritize our crisp, zero-latency SVG vector crest; fallback to scraped logo if unmapped
+  const activeSrc = vectorLogo || (!imgError && logo ? logo : null);
 
   const sizeCls = SIZE_CLASSES[size] || SIZE_CLASSES.md;
   const textCls = TEXT_CLASSES[size] || TEXT_CLASSES.md;

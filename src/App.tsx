@@ -8,18 +8,16 @@ import { Footer } from './components/Footer';
 import { HomePage } from './pages/HomePage';
 import { WatchRoomPage } from './pages/WatchRoomPage';
 import { SchedulePage } from './pages/SchedulePage';
-import { LeaguesPage } from './pages/LeaguesPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { TermsPage } from './pages/TermsPage';
 import { DmcaPage } from './pages/DmcaPage';
-import { FavoritesPage } from './pages/FavoritesPage';
 
 export default function App() {
   return (
     <BrowserRouter>
       <AppProvider>
         <div
-          className="min-h-screen theme-canvas flex flex-col pb-16 md:pb-0 antialiased selection:bg-[#c8f526] selection:text-[#0a0f0c]"
+          className="min-h-screen theme-canvas flex flex-col pb-28 md:pb-0 antialiased selection:bg-[#c8f526] selection:text-[#0a0f0c]"
           dir="rtl"
         >
           {/* Broadcast Top Control Bar */}
@@ -34,8 +32,8 @@ export default function App() {
               <Route path="/watchroom/:channelId" element={<WatchRoomPage />} />
               <Route path="/schedule" element={<SchedulePage />} />
               <Route path="/schedual" element={<Navigate to="/schedule" replace />} />
-              <Route path="/leagues" element={<LeaguesPage />} />
-              <Route path="/favorites" element={<FavoritesPage />} />
+              <Route path="/leagues" element={<Navigate to="/schedule" replace />} />
+              <Route path="/favorites" element={<Navigate to="/home" replace />} />
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/dmca" element={<DmcaPage />} />
