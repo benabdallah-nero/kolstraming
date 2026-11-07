@@ -74,7 +74,7 @@ const MultiViewCellPlayer: React.FC<{
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [status, setStatus] = useState<'loading' | 'playing' | 'error'>('loading');
-  const [sourceMode, setSourceMode] = useState<'dembed' | 'cast' | 'wide'>('dembed');
+  const [sourceMode, setSourceMode] = useState<'cast' | 'dembed' | 'wide'>('cast');
 
   useEffect(() => {
     const video = videoRef.current;
@@ -116,10 +116,12 @@ const MultiViewCellPlayer: React.FC<{
             hls.recoverMediaError();
           } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
             errCount++;
-            if (errCount <= 2) {
+            if (errCount <= 1) {
               hls.startLoad();
+            } else if (sourceMode === 'cast') {
+              setSourceMode('dembed');
             } else if (sourceMode === 'dembed') {
-              setSourceMode('cast');
+              setSourceMode('wide');
             } else {
               setStatus('error');
             }
@@ -544,7 +546,7 @@ export const WatchRoomPage: React.FC = () => {
 
     let cancelled = false;
     const sourceParam =
-      playerMode === 'server1' ? 'dembed' : playerMode === 'server2' ? 'cast' : 'wide';
+      playerMode === 'server1' ? 'cast' : playerMode === 'server2' ? 'dembed' : 'wide';
 
     getAuthorizedStreamUrl(currentChannel.id, sourceParam, retryKey).then(streamUrl => {
       if (cancelled || !videoRef.current) return;
@@ -588,10 +590,14 @@ export const WatchRoomPage: React.FC = () => {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               netErrorCount++;
-              if (netErrorCount <= 3) {
+              if (netErrorCount <= 1) {
                 hls.startLoad();
               } else if (playerMode === 'server1') {
+                showToast('المصدر الرئيسي بطيء، جاري التبديل للمصدر البديل...');
                 setPlayerMode('server2');
+              } else if (playerMode === 'server2') {
+                showToast('جاري التبديل إلى السيرفر الاحتياطي...');
+                setPlayerMode('server3');
               } else {
                 setPlayerStatus('error');
               }
@@ -600,15 +606,28 @@ export const WatchRoomPage: React.FC = () => {
               hls.recoverMediaError();
               break;
             default:
-              setPlayerStatus('error');
-              hls.destroy();
+              if (playerMode === 'server1') {
+                showToast('جاري التبديل تلقائياً للمصدر البديل...');
+                setPlayerMode('server2');
+              } else if (playerMode === 'server2') {
+                setPlayerMode('server3');
+              } else {
+                setPlayerStatus('error');
+                hls.destroy();
+              }
               break;
           }
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = streamUrl;
         video.addEventListener('loadedmetadata', tryPlayDirect, { once: true });
-        video.addEventListener('error', () => setPlayerStatus('error'), { once: true });
+        video.addEventListener('error', () => {
+          if (playerMode === 'server1') {
+            setPlayerMode('server2');
+          } else {
+            setPlayerStatus('error');
+          }
+        }, { once: true });
       }
     });
 

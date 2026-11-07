@@ -72,7 +72,7 @@ export async function getStreamAuth(channelId: string | number): Promise<CachedA
  */
 export async function getAuthorizedStreamUrl(
   channelId: string | number,
-  sourceMode: string = 'dembed',
+  sourceMode: string = 'cast',
   retryKey: string | number = 0
 ): Promise<string> {
   const key = String(channelId);

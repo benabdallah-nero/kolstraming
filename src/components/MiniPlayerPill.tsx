@@ -52,7 +52,7 @@ export const MiniPlayerPill: React.FC = () => {
         });
     };
 
-    getAuthorizedStreamUrl(activeStreamingChannel.id, 'dembed').then(streamUrl => {
+    getAuthorizedStreamUrl(activeStreamingChannel.id, 'cast').then(streamUrl => {
       if (cancelled || !videoRef.current) return;
 
       if (Hls.isSupported()) {

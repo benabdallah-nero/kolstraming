@@ -3163,11 +3163,27 @@ async function fetchWideRewrittenPlaylist(
 
 // Keep track of sticky provider per channel+source so MEDIA-SEQUENCE never flips mid-playback
 const stickyProviderMap = new Map<string, { provider: 'dembed' | 'cast' | 'wide'; ts: number }>();
+// Track recent chunk/segment failures per provider and channel to auto-failover seamlessly
+const providerFailureMap = new Map<string, { count: number; lastFailed: number }>();
+
+function recordProviderFailure(channelId: string | number, provider: 'dembed' | 'cast' | 'wide') {
+  const key = `${channelId}_${provider}`;
+  const curr = providerFailureMap.get(key) || { count: 0, lastFailed: 0 };
+  providerFailureMap.set(key, { count: curr.count + 1, lastFailed: Date.now() });
+}
+
+function isProviderRecentlyFailed(channelId: string | number, provider: 'dembed' | 'cast' | 'wide'): boolean {
+  const key = `${channelId}_${provider}`;
+  const rec = providerFailureMap.get(key);
+  if (!rec) return false;
+  // If provider failed more than twice in the last 3 minutes, consider it degraded
+  return rec.count >= 2 && Date.now() - rec.lastFailed < 180000;
+}
 
 // API: Proxy Master/Media M3U8 playlist supporting 3 distinct upstream CDNs
 app.get('/api/proxy-stream/:id/live.m3u8', async (req: Request, res: Response) => {
   const id = req.params.id;
-  const preferredSource = (req.query.source as string) || 'dembed';
+  const preferredSource = (req.query.source as string) || 'cast';
   const token = req.query.token as string | undefined;
   const exp = req.query.exp as string | undefined;
 
@@ -3193,26 +3209,34 @@ app.get('/api/proxy-stream/:id/live.m3u8', async (req: Request, res: Response) =
     const stickyKey = `${id}_${preferredSource}`;
     const sticky = stickyProviderMap.get(stickyKey);
 
+    // Cast is the most stable CDN upstream. Prioritize cast -> wide -> dembed
     let baseOrder: Array<'dembed' | 'cast' | 'wide'> =
-      preferredSource === 'cast'
-        ? ['cast', 'dembed', 'wide']
+      preferredSource === 'dembed'
+        ? ['dembed', 'cast', 'wide']
         : preferredSource === 'wide'
-          ? ['wide', 'dembed', 'cast']
-          : ['dembed', 'cast', 'wide'];
+          ? ['wide', 'cast', 'dembed']
+          : ['cast', 'wide', 'dembed'];
 
-    // If a provider is already actively serving this channel within the last 2 minutes, try it first!
-    if (sticky && Date.now() - sticky.ts < 120000) {
+    // Deprioritize any provider that has recent 502/404 chunk failures for this channel
+    baseOrder.sort((a, b) => {
+      const aBad = isProviderRecentlyFailed(id, a) ? 1 : 0;
+      const bBad = isProviderRecentlyFailed(id, b) ? 1 : 0;
+      return aBad - bBad;
+    });
+
+    // If a provider is already actively serving this channel within the last 2 minutes without recent failure, try it first!
+    if (sticky && Date.now() - sticky.ts < 120000 && !isProviderRecentlyFailed(id, sticky.provider)) {
       baseOrder = [sticky.provider, ...baseOrder.filter(p => p !== sticky.provider)];
     }
 
     for (const provider of baseOrder) {
       let playlist: string | null = null;
-      if (provider === 'dembed') {
-        playlist = await fetchDembedRewrittenPlaylist(id, token, exp);
-      } else if (provider === 'cast') {
+      if (provider === 'cast') {
         playlist = await fetchCastRewrittenPlaylist(id, token, exp);
       } else if (provider === 'wide') {
         playlist = await fetchWideRewrittenPlaylist(id, token, exp);
+      } else if (provider === 'dembed') {
+        playlist = await fetchDembedRewrittenPlaylist(id, token, exp);
       }
       if (playlist) {
         stickyProviderMap.set(stickyKey, { provider, ts: Date.now() });
@@ -3365,6 +3389,9 @@ app.get('/api/proxy-chunk', async (req: Request, res: Response) => {
 
   const result = await inflight;
   if (!result) {
+    if (chunkId && (mode === 'dembed' || mode === 'cast' || mode === 'wide')) {
+      recordProviderFailure(chunkId, mode as 'dembed' | 'cast' | 'wide');
+    }
     return res.status(502).send('Chunk fetch failed');
   }
 
